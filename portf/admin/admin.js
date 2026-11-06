@@ -324,8 +324,9 @@ function renderContentSection(section) {
     '<div class="form-actions"><button class="primary-button" type="submit">Save Draft</button><button class="secondary-button" type="button" id="previewRecordButton">Preview</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
     '<div id="previewPanel" class="preview-panel" aria-live="polite"></div>' +
     '<p class="form-hint">Preview before publishing. Publishing changes the database status only; it does not deploy or change the public website.</p></form></div>';
-  contentPanel.insertAdjacentHTML("afterbegin", '<div id="sectionResources"></div>');
-  if (window.sectionResources) window.sectionResources.load(section);
+  contentPanel.insertAdjacentHTML("afterbegin", '<div id="sectionResources"><section class="section-resources-card"><h3>Section media & resources</h3><p class="form-hint">Preparing the section file manager…</p></section></div>');
+  if (window.sectionResources && typeof window.sectionResources.load === "function") window.sectionResources.load(section);
+  else document.querySelector("#sectionResources .form-hint").textContent = "The resource manager script did not load. Please share this preview page address so I can verify its deployment."; 
 }
 function clearEditor() {
   editingId = null;
