@@ -98,7 +98,8 @@
       '<button class="secondary-button" type="button" id="cmsClear">Clear</button></div></form></section>' +
       '<section class="cms-media-panel"><h3>Section media (' + activeMedia.length + ')</h3>' +
       '<p class="cms-help">Tick the files that belong with the entry being edited. Uploads are private until their records are published.</p>' +
-      '<div class="cms-media-list">' + (media || '<p class="empty-state">No media uploaded to this section yet.</p>') + '</div></section></div><div id="sectionResources"></div>';
+      '<div class="cms-media-list">' + (media || '<p class="empty-state">No media uploaded to this section yet.</p>') + '</div></section></div>';
+    panel.insertAdjacentHTML("afterbegin", '<div id="sectionResources"></div>');
     if (window.sectionResources) window.sectionResources.load(activeSection);
   }
   function clearForm() {
