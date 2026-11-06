@@ -234,7 +234,7 @@ async function restoreNavigationFromCms() {
   if (page.error) throw page.error;
   if (!page.data) return;
   const result = await supabaseClient.from("cms_sections")
-    .select("section_key,title,parent_section_id,sort_order")
+    .select("id,section_key,title,parent_section_id,sort_order")
     .eq("site_id", window.portfolioCmsSiteId).eq("page_id", page.data.id)
     .order("sort_order", { ascending: true });
   if (result.error) throw result.error;
