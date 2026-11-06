@@ -66,3 +66,25 @@
 .resource-row span{font-size:11px;color:var(--muted)}
 .resource-row a{font-size:12px;color:#c5b6ff}
 @media(max-width:800px){.section-resources-card .form-row{grid-template-columns:1fr}}
+
+
+/* Universal drag-and-drop media library */
+.section-resources-card{margin-top:24px;padding:22px;border:1px solid var(--line);border-radius:16px;background:rgba(17,21,42,.78);display:grid;gap:15px}
+.resource-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.resource-heading h3{margin:0 0 6px}
+.resource-count{white-space:nowrap;padding:6px 10px;border-radius:20px;background:rgba(154,131,255,.12);color:#c9bdff;font-size:11px}
+.resource-dropzone{position:relative;min-height:145px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px dashed rgba(177,159,255,.55);border-radius:14px;background:rgba(154,131,255,.055);cursor:pointer;text-align:center;padding:20px;transition:.18s}
+.resource-dropzone:hover,.resource-dropzone.drag-over{border-color:var(--gold);background:rgba(244,201,107,.09);box-shadow:0 0 24px rgba(154,131,255,.12)}
+.resource-dropzone strong{font-size:14px}.resource-dropzone span{font-size:11px;color:var(--muted)}
+.resource-drop-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:rgba(154,131,255,.15);font-size:24px;color:#c9bdff}
+.resource-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.resource-toolbar{display:grid;grid-template-columns:1fr 1.6fr;gap:12px}
+.resource-create-folder,.resource-create-link{display:flex;gap:8px;min-width:0}
+.resource-toolbar input{min-width:0;width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:#0b0e1e;color:var(--text);font:inherit;font-size:12px}
+.resource-breadcrumb{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+.resource-upload-status{min-height:18px;color:var(--good);font-size:12px}
+.resource-file-icon{width:28px;flex:0 0 28px;text-align:center;font-size:19px}
+.resource-file-info{flex:1;min-width:150px;display:grid;gap:4px}
+.resource-file-info strong{font-size:12px;overflow-wrap:anywhere}
+.resource-file-info span{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+@media(max-width:800px){.resource-toolbar{grid-template-columns:1fr}.resource-create-folder,.resource-create-link{flex-wrap:wrap}.resource-heading{flex-direction:column}}
