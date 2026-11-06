@@ -47,7 +47,12 @@
     const subsections = Array.from(doc.querySelectorAll(".topic[id], [data-cms-subsection][id]"))
       .filter(function (node) { return validId.test(node.id); })
       .map(function (node) {
-        return { key: "topic__" + node.id, title: titleFor(node, doc) };
+        const parent = node.closest("section[id]");
+        return {
+          key: "topic__" + node.id,
+          title: titleFor(node, doc),
+          parentKey: parent && parent !== node ? parent.id : null
+        };
       });
 
     if (typeof window.__portfolioSetSiteSections === "function") {
