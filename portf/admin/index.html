@@ -63,23 +63,8 @@
         </div>
         <div class="account-chip"><span class="online-dot"></span><span id="adminEmail">Administrator</span></div>
       </header>
-      <section id="contentPanel" class="content-panel">
-        <div class="welcome-card">
-          <div class="welcome-icon">✦</div>
-          <div>
-            <h2>Your management workspace is ready</h2>
-            <p>Your sign-in has been verified against the administrator permission in Supabase. This is the secure dashboard foundation; the content editors and media uploader will be connected in the next build stage.</p>
-          </div>
-        </div>
-        <div class="stat-grid">
-          <article class="stat-card"><span>SECURITY</span><strong>Protected</strong><p>Supabase Auth + administrator check</p></article>
-          <article class="stat-card"><span>CONTENT</span><strong>Next stage</strong><p>Connect portfolio sections and publishing</p></article>
-          <article class="stat-card"><span>MEDIA</span><strong>Next stage</strong><p>Connect image and video storage</p></article>
-        </div>
-        <div class="notice">
-          <strong>Important</strong>
-          <p>Do not share your password or Supabase service-role/secret key. This dashboard uses only your project URL and public anon/publishable key; database and storage permissions are enforced by Supabase RLS.</p>
-        </div>
+      <section id="contentPanel" class="content-panel" aria-live="polite">
+        <div class="loading-state">Loading your portfolio workspace…</div>
       </section>
     </main>
   </div>
