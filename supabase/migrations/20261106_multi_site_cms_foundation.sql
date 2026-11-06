@@ -20,8 +20,8 @@ create table if not exists public.cms_sites (
 
 create table if not exists public.cms_site_members (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.cms_sites(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  site_id uuid not null references public.cms_sites(id),
+  user_id uuid not null references auth.users(id),
   role text not null default 'editor' check (role in ('owner','admin','editor','viewer')),
   created_at timestamptz not null default now(),
   unique (site_id, user_id)
@@ -29,7 +29,7 @@ create table if not exists public.cms_site_members (
 
 create table if not exists public.cms_pages (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.cms_sites(id) on delete cascade,
+  site_id uuid not null references public.cms_sites(id),
   slug text not null,
   title text not null,
   status text not null default 'draft' check (status in ('draft','published','archived')),
@@ -43,7 +43,7 @@ create table if not exists public.cms_pages (
 
 create table if not exists public.cms_sections (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.cms_sites(id) on delete cascade,
+  site_id uuid not null references public.cms_sites(id),
   page_id uuid not null,
   parent_section_id uuid,
   section_key text not null,
@@ -60,13 +60,13 @@ create table if not exists public.cms_sections (
   unique (site_id, page_id, section_key),
   unique (id, site_id),
   unique (id, page_id, site_id),
-  foreign key (page_id, site_id) references public.cms_pages(id, site_id) on delete cascade,
-  foreign key (parent_section_id, site_id) references public.cms_sections(id, site_id) on delete cascade
+  foreign key (page_id, site_id) references public.cms_pages(id, site_id),
+  foreign key (parent_section_id, site_id) references public.cms_sections(id, site_id)
 );
 
 create table if not exists public.cms_content (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.cms_sites(id) on delete cascade,
+  site_id uuid not null references public.cms_sites(id),
   page_id uuid not null,
   section_id uuid not null,
   title text not null,
@@ -78,9 +78,9 @@ create table if not exists public.cms_content (
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  foreign key (page_id, site_id) references public.cms_pages(id, site_id) on delete cascade,
+  foreign key (page_id, site_id) references public.cms_pages(id, site_id),
   foreign key (section_id, page_id, site_id)
-    references public.cms_sections(id, page_id, site_id) on delete cascade
+    references public.cms_sections(id, page_id, site_id)
 );
 
 create index if not exists cms_pages_site_order_idx on public.cms_pages(site_id, sort_order);
@@ -90,7 +90,7 @@ create index if not exists cms_content_section_status_order_idx
 
 create table if not exists public.cms_media (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.cms_sites(id) on delete cascade,
+  site_id uuid not null references public.cms_sites(id),
   page_id uuid,
   section_id uuid,
   storage_path text not null unique,
@@ -107,9 +107,9 @@ create table if not exists public.cms_media (
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  foreign key (page_id, site_id) references public.cms_pages(id, site_id) on delete cascade,
+  foreign key (page_id, site_id) references public.cms_pages(id, site_id),
   foreign key (section_id, page_id, site_id)
-    references public.cms_sections(id, page_id, site_id) on delete cascade
+    references public.cms_sections(id, page_id, site_id)
 );
 
 create index if not exists cms_media_section_status_order_idx
