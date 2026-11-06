@@ -302,6 +302,20 @@ function openMediaPreview(url, name, type) {
     '<div class="media-preview-heading"><strong>' + escapeHtml(name || "Media preview") +
     '</strong><button class="secondary-button" type="button" id="mediaPreviewClose">Close</button></div>' +
     media + '</section></div>');
+  const modal = document.getElementById("mediaPreviewModal");
+  function closePreview() {
+    const video = modal.querySelector("video");
+    if (video) video.pause();
+    modal.remove();
+  }
+  modal.querySelector("#mediaPreviewClose").addEventListener("click", closePreview);
+  modal.querySelector("#mediaPreviewBackdrop").addEventListener("click", closePreview);
+  document.addEventListener("keydown", function handlePreviewEscape(event) {
+    if (event.key === "Escape" && document.getElementById("mediaPreviewModal") === modal) {
+      closePreview();
+      document.removeEventListener("keydown", handlePreviewEscape);
+    }
+  });
 }
 
 async function uploadMedia(files) {
