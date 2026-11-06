@@ -165,15 +165,61 @@ function editRecord(id) {
   document.getElementById("recordSort").value = record.sort_order || 0;
   document.getElementById("recordTitle").focus();
 }
+function safePreviewUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : "";
+  } catch (_error) { return ""; }
+}
+function previewValue(value) {
+  if (Array.isArray(value)) {
+    return '<ul class="visual-preview-list">' + value.map(function (item) {
+      return '<li>' + escapeHtml(typeof item === "object" ? JSON.stringify(item) : item) + '</li>';
+    }).join("") + '</ul>';
+  }
+  if (value && typeof value === "object") {
+    return '<dl class="visual-preview-details">' + Object.keys(value).map(function (key) {
+      return '<div><dt>' + escapeHtml(key.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ")) +
+        '</dt><dd>' + escapeHtml(typeof value[key] === "object" ? JSON.stringify(value[key]) : value[key]) + '</dd></div>';
+    }).join("") + '</dl>';
+  }
+  return '<p class="visual-preview-text">' + escapeHtml(value) + '</p>';
+}
 function previewRecord() {
   const title = document.getElementById("recordTitle").value.trim();
   let content;
   try { content = JSON.parse(document.getElementById("recordContent").value || "{}"); }
   catch (error) { setMessage("Content must be valid JSON: " + error.message, "error"); return; }
   if (!title) { setMessage("Add a title before previewing.", "error"); return; }
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    setMessage("Content must be a JSON object so it can be previewed.", "error"); return;
+  }
   const panel = document.getElementById("previewPanel");
-  panel.innerHTML = '<div class="preview-card"><div class="preview-label">CONTENT PREVIEW</div><h4>' + escapeHtml(title) + '</h4><pre>' + escapeHtml(JSON.stringify(content, null, 2)) + '</pre><button class="primary-button" type="button" id="confirmPublishButton">Confirm Publish</button><p>Confirming marks this entry as published in Supabase. It will not deploy changes to the public website.</p></div>';
-  setMessage("Review the preview, then confirm publishing if everything is correct.", "success");
+  const description = content.description || content.summary || content.text || "";
+  const subtitle = content.subtitle || content.role || content.category || "";
+  const imageUrl = safePreviewUrl(content.image || content.imageUrl || content.image_url || "");
+  const image = imageUrl
+    ? '<img class="visual-preview-image" src="' + escapeHtml(imageUrl) + '" alt="' +
+      escapeHtml(content.imageAlt || content.image_alt || title) + '">'
+    : "";
+  const known = new Set(["description","summary","text","subtitle","role","category","image","imageUrl","image_url","imageAlt","image_alt"]);
+  const extraKeys = Object.keys(content).filter(function (key) { return !known.has(key); });
+  const extras = extraKeys.map(function (key) {
+    const label = key.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ");
+    return '<section class="visual-preview-field"><h5>' + escapeHtml(label) + '</h5>' +
+      previewValue(content[key]) + '</section>';
+  }).join("");
+  panel.innerHTML =
+    '<article class="visual-preview-card">' + image +
+    '<div class="visual-preview-body"><div class="preview-label">VISUAL CONTENT PREVIEW · ' +
+    escapeHtml(SECTION_TITLES[currentSection] || "PORTFOLIO") + '</div><h4>' + escapeHtml(title) + '</h4>' +
+    (subtitle ? '<p class="visual-preview-subtitle">' + escapeHtml(subtitle) + '</p>' : '') +
+    (description ? '<p class="visual-preview-description">' + escapeHtml(description) + '</p>' : '') +
+    extras + '</div></article>' +
+    '<div class="preview-publish"><button class="primary-button" type="button" id="confirmPublishButton">Confirm Publish</button>' +
+    '<p>Review this visual content preview. Confirming marks this entry as published in Supabase; it does not deploy or change the public website.</p></div>';
+  setMessage("Visual preview ready. Review it before confirming publication.", "success");
 }
 async function saveRecord(event, statusOverride) {
   if (event && event.preventDefault) event.preventDefault();
