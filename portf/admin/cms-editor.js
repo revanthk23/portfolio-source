@@ -92,7 +92,7 @@
       '<label>Description<textarea id="cmsDescription" rows="5" placeholder="Describe this work or subsection content"></textarea></label>' +
       '<label>Upload images or videos<input id="cmsUpload" type="file" accept="image/*,video/*" multiple></label>' +
       '<p class="cms-help">Uploaded files stay in the private CMS media bucket and are associated with this section. Select the media below to attach it to this entry.</p>' +
-      '<div class="form-row"><label>Status<select id="cmsStatus"><option value="draft">Draft</option><option value="published">Published</option></select></label>' +
+      '<div class="form-row"><label>Status<select id="cmsStatus"><option value="draft">Draft (public display not connected yet)</option></select></label>' +
       '<label>Display order<input id="cmsSort" type="number" value="0"></label></div>' +
       '<div class="form-actions"><button class="primary-button" type="submit">Save entry</button>' +
       '<button class="secondary-button" type="button" id="cmsClear">Clear</button></div></form></section>' +
@@ -161,7 +161,7 @@
       description: document.getElementById("cmsDescription").value.trim(),
       media_ids: Array.from(selectedMedia)
     };
-    const status = document.getElementById("cmsStatus").value;
+    const status = "draft"; // Keep entries private until the public renderer is implemented and tested.
     const data = {
       site_id: siteId(), page_id: (window.portfolioCmsStructureSynced || {}).pageId,
       section_id: activeSectionId, title: title, slug: null, payload: payload,
