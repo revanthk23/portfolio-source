@@ -27,20 +27,29 @@ window.__portfolioSetSiteSections = function (mainSections, subsections) {
   const seen = new Set();
   let html = button("overview", "Overview", false) +
     '<div class="nav-group-label">MAIN WEBSITE</div>';
-  discoveredMainSections.forEach(function (item) {
-    if (!item || !item.key || seen.has(item.key)) return;
-    seen.add(item.key);
-    html += button(item.key, item.title, false);
+  discoveredMainSections.forEach(function (main) {
+    if (!main || !main.key || seen.has(main.key)) return;
+    seen.add(main.key);
+    html += button(main.key, main.title, false);
+    const children = discoveredSubsections.filter(function (sub) {
+      return sub && sub.parentKey === main.key && !seen.has(sub.key);
+    });
+    children.forEach(function (sub) {
+      seen.add(sub.key);
+      html += button(sub.key, "↳ " + sub.title, true);
+    });
   });
-  if (discoveredSubsections.length) {
-    html += '<div class="nav-group-label">SUBSECTIONS</div>';
-    discoveredSubsections.forEach(function (item) {
-      if (!item || !item.key || seen.has(item.key)) return;
-      seen.add(item.key);
-      html += button(item.key, item.title, true);
+  const ungrouped = discoveredSubsections.filter(function (sub) {
+    return sub && sub.key && !seen.has(sub.key);
+  });
+  if (ungrouped.length) {
+    html += '<div class="nav-group-label">OTHER SUBSECTIONS</div>';
+    ungrouped.forEach(function (sub) {
+      seen.add(sub.key);
+      html += button(sub.key, sub.title, true);
     });
   }
-  html += '<div class="nav-group-label">MEDIA</div>' +
+  html += '<div class="nav-group-label">MEDIA LIBRARY</div>' +
     button("images", "Image Library", false) + button("videos", "Video Library", false);
   nav.innerHTML = html;
 };
