@@ -281,9 +281,29 @@ async function loadMedia(section) {
         : '<img loading="lazy" src="' + escapeHtml(entry.url) + '" alt="' + escapeHtml(name) + '">')
         : '<div class="media-unavailable">Preview unavailable</div>';
       return '<article class="media-card">' + preview + '<div class="media-meta"><strong>' + escapeHtml(name) +
-        '</strong><button class="danger-button" data-delete-media="' + escapeHtml(name) + '">Delete</button></div></article>';
+        '</strong><div class="record-actions">' +
+        (entry.url ? '<button class="secondary-button" data-preview-media="' + escapeHtml(name) +
+          '" data-preview-url="' + escapeHtml(entry.url) + '" data-preview-type="' + (isVideo ? 'video' : 'image') +
+          '">Preview</button>' : '') +
+        '<button class="danger-button" data-delete-media="' + escapeHtml(name) + '">Delete</button></div></div></article>';
     }).join("") : '<p class="empty-state">No ' + (isVideo ? "videos" : "images") + ' uploaded yet.</p>') + '</div>';
 }
+function openMediaPreview(url, name, type) {
+  if (!url) return;
+  const media = type === "video"
+    ? '<video class="media-preview-large" controls autoplay src="' + escapeHtml(url) + '"></video>'
+    : '<img class="media-preview-large" src="' + escapeHtml(url) + '" alt="' + escapeHtml(name || "Portfolio image") + '">';
+  const existing = document.getElementById("mediaPreviewModal");
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML("beforeend",
+    '<div class="media-preview-modal" id="mediaPreviewModal">' +
+    '<div class="media-preview-backdrop" id="mediaPreviewBackdrop"></div>' +
+    '<section class="media-preview-dialog" role="dialog" aria-modal="true" aria-label="Media preview">' +
+    '<div class="media-preview-heading"><strong>' + escapeHtml(name || "Media preview") +
+    '</strong><button class="secondary-button" type="button" id="mediaPreviewClose">Close</button></div>' +
+    media + '</section></div>');
+}
+
 async function uploadMedia(files) {
   for (const file of Array.from(files)) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -328,6 +348,13 @@ contentPanel.addEventListener("click", function (event) {
   if (edit) return editRecord(edit.dataset.editRecord);
   const del = event.target.closest("[data-delete-record]");
   if (del) return deleteRecord(del.dataset.deleteRecord);
+  const mediaPreview = event.target.closest("[data-preview-media]");
+  if (mediaPreview) return openMediaPreview(mediaPreview.dataset.previewUrl, mediaPreview.dataset.previewMedia, mediaPreview.dataset.previewType);
+  if (event.target.id === "mediaPreviewClose" || event.target.id === "mediaPreviewBackdrop") {
+    const modal = document.getElementById("mediaPreviewModal");
+    if (modal) modal.remove();
+    return;
+  }
   const mediaDel = event.target.closest("[data-delete-media]");
   if (mediaDel) return deleteMedia(mediaDel.dataset.deleteMedia);
   if (event.target.id === "newRecordButton") return clearEditor();
