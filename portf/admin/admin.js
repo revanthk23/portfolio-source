@@ -105,6 +105,14 @@ async function verifyAdministrator() {
     showLogin("This account is not authorized to access the portfolio dashboard.");
     return false;
   }
+  // Optional bootstrap: the RPC exists only after the additive multi-site migration is applied.
+  // Its failure must not block the already-working legacy portfolio dashboard.
+  const siteBootstrap = await supabaseClient.rpc("cms_bootstrap_portfolio_site");
+  if (!siteBootstrap.error && siteBootstrap.data) {
+    window.portfolioCmsSiteId = siteBootstrap.data;
+  } else if (siteBootstrap.error) {
+    console.info("Multi-site CMS bootstrap is not available yet; continuing with the legacy portfolio CMS.");
+  }
   showApp(user.email);
   if (typeof window.syncPortfolioStructure === "function") {
     try {
