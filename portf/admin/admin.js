@@ -265,7 +265,9 @@ function renderContentSection(section) {
     '<label>Slug (optional)<input id="recordSlug" maxlength="180" placeholder="example-entry"></label>' +
     `<label>Content (JSON)<textarea id="recordContent" rows="9" spellcheck="false">{
   "description": ""
-}</textarea><small>Use valid JSON. You can add fields such as description, image, date, role, or links.</small></label>` +
+}</textarea><small>Use valid JSON. Uploaded files are added to the media_files field.</small></label>` +
+    '<label>Add images or videos to this entry<input id="recordMediaUpload" type="file" accept="image/*,video/*" multiple><small>Files are uploaded to the existing private storage and attached to this entry when saved.</small></label>' +
+    '<div id="recordMediaStatus" class="form-hint" role="status"></div>' +
     '<div class="form-row"><label>Status<select id="recordStatus"><option value="draft">Draft (not public)</option></select></label>' +
     '<label>Sort order<input id="recordSort" type="number" value="0"></label></div>' +
     '<div class="form-actions"><button class="primary-button" type="submit">Save Draft</button><button class="secondary-button" type="button" id="previewRecordButton">Preview</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
@@ -382,6 +384,42 @@ async function saveRecord(event, statusOverride) {
   setMessage("Entry saved successfully.", "success");
   await loadContentSection(currentSection);
 }
+async function uploadRecordMedia(files) {
+  const status = document.getElementById("recordMediaStatus");
+  const field = document.getElementById("recordContent");
+  if (!field) return;
+  let content;
+  try { content = JSON.parse(field.value || "{}"); }
+  catch (_error) {
+    if (status) status.textContent = "Please correct the Content JSON before uploading files.";
+    return;
+  }
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    if (status) status.textContent = "Content must be a JSON object before adding media.";
+    return;
+  }
+  if (!Array.isArray(content.media_files)) content.media_files = [];
+  if (status) status.textContent = "Uploading files…";
+  for (const file of Array.from(files || [])) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "-" + safeName;
+    const result = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
+      cacheControl: "3600", upsert: false, contentType: file.type || undefined
+    });
+    if (result.error) {
+      if (status) status.textContent = "Upload failed for " + file.name + ": " + result.error.message;
+      return;
+    }
+    content.media_files.push({
+      path: path, name: file.name,
+      type: file.type.indexOf("video/") === 0 ? "video" : "image",
+      mime_type: file.type || null
+    });
+  }
+  field.value = JSON.stringify(content, null, 2);
+  if (status) status.textContent = "Upload complete. Save this entry to keep the attachment references.";
+}
+
 async function deleteRecord(id) {
   const record = currentRecords.find(function (item) { return item.id === id; });
   if (!record || !window.confirm('Delete "' + record.title + '"? This cannot be undone.')) return;
@@ -525,6 +563,11 @@ contentPanel.addEventListener("submit", function (event) {
   if (event.target.id === "recordForm") saveRecord(event);
 });
 contentPanel.addEventListener("change", function (event) {
+  if (event.target.id === "recordMediaUpload" && event.target.files && event.target.files.length) {
+    uploadRecordMedia(event.target.files);
+    event.target.value = "";
+    return;
+  }
   if (event.target.id === "mediaUpload" && event.target.files && event.target.files.length) {
     uploadMedia(event.target.files);
     event.target.value = "";
