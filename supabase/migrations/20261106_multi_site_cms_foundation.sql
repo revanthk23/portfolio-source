@@ -143,23 +143,18 @@ begin
 end;
 $$;
 
-drop trigger if exists cms_sites_touch_updated_at on public.cms_sites;
 create trigger cms_sites_touch_updated_at before update on public.cms_sites
 for each row execute function public.cms_touch_updated_at();
 
-drop trigger if exists cms_pages_touch_updated_at on public.cms_pages;
 create trigger cms_pages_touch_updated_at before update on public.cms_pages
 for each row execute function public.cms_touch_updated_at();
 
-drop trigger if exists cms_sections_touch_updated_at on public.cms_sections;
 create trigger cms_sections_touch_updated_at before update on public.cms_sections
 for each row execute function public.cms_touch_updated_at();
 
-drop trigger if exists cms_content_touch_updated_at on public.cms_content;
 create trigger cms_content_touch_updated_at before update on public.cms_content
 for each row execute function public.cms_touch_updated_at();
 
-drop trigger if exists cms_media_touch_updated_at on public.cms_media;
 create trigger cms_media_touch_updated_at before update on public.cms_media
 for each row execute function public.cms_touch_updated_at();
 
