@@ -321,6 +321,10 @@ begin
 end;
 $$;
 
+revoke all on function public.cms_is_site_member(uuid, text[]) from public;
+revoke all on function public.cms_bootstrap_portfolio_site() from public, anon;
+revoke all on function public.cms_create_site(text, text, text) from public, anon;
+revoke all on function public.cms_touch_updated_at() from public, anon, authenticated;
 grant execute on function public.cms_is_site_member(uuid, text[]) to anon, authenticated;
 grant execute on function public.cms_bootstrap_portfolio_site() to authenticated;
 grant execute on function public.cms_create_site(text, text, text) to authenticated;
