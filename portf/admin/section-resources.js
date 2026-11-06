@@ -34,7 +34,7 @@
     const host=document.getElementById("sectionResources"); if(!host)return;
     const folders=records.filter(x=>x.payload.resource_kind==="folder" && (x.payload.parent_folder_id||null)===(currentFolder||null));
     const links=records.filter(x=>x.payload.resource_kind==="link" && (x.payload.parent_folder_id||null)===(currentFolder||null));
-    const media=files.filter(x=>(x.description||"").indexOf("folder:")===0 ? x.description==="folder:"+currentFolder : !x.description || x.description==="folder:"+(currentFolder||""));
+    const media=files.filter(x=>(x.description||"folder:")==="folder:"+(currentFolder||""));
     host.innerHTML='<section class="cms-editor-card section-resources-card"><h3>Section resources</h3><p class="cms-help">Add any file type, useful links, and folders independently of content entries. Resources are private drafts until public display is connected.</p><div id="sectionResourcesMessage" class="page-message" role="status"></div>'+
       '<div class="form-row"><label>Upload files<input id="resourceFiles" type="file" multiple></label><label>Folder name<input id="resourceFolderName" placeholder="New folder"></label><button class="secondary-button" type="button" id="resourceCreateFolder">Create folder</button></div>'+
       '<div class="form-row"><label>Link title<input id="resourceLinkTitle" placeholder="Project or reference name"></label><label>URL<input id="resourceLinkUrl" type="url" placeholder="https://…"></label><button class="secondary-button" type="button" id="resourceAddLink">Add link</button></div>'+
