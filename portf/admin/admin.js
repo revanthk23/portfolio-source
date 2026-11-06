@@ -10,6 +10,51 @@ const SECTION_TITLES = {
   farm: "Farm Business", courses: "Courses", contact: "Contact Details",
   settings: "Website Settings"
 };
+let discoveredMainSections = [];
+let discoveredSubsections = [];
+
+window.__portfolioSetSiteSections = function (mainSections, subsections) {
+  discoveredMainSections = Array.isArray(mainSections) ? mainSections : [];
+  discoveredSubsections = Array.isArray(subsections) ? subsections : [];
+  discoveredMainSections.forEach(function (item) {
+    if (item && item.key && item.title) SECTION_TITLES[item.key] = item.title;
+  });
+  discoveredSubsections.forEach(function (item) {
+    if (item && item.key && item.title) SECTION_TITLES[item.key] = item.title;
+  });
+
+  const nav = document.getElementById("sectionNav");
+  if (!nav) return;
+  const button = function (key, title, nested) {
+    return '<button class="nav-item' + (nested ? ' nav-subitem' : '') +
+      '" data-section="' + escapeHtml(key) + '">' + escapeHtml(title) + '</button>';
+  };
+  const seen = new Set();
+  let html = button("overview", "Overview", false) +
+    '<div class="nav-group-label">MAIN WEBSITE</div>';
+  discoveredMainSections.forEach(function (item) {
+    if (!item || !item.key || seen.has(item.key)) return;
+    seen.add(item.key);
+    html += button(item.key, item.title, false);
+  });
+  if (discoveredSubsections.length) {
+    html += '<div class="nav-group-label">SUBSECTIONS</div>';
+    discoveredSubsections.forEach(function (item) {
+      if (!item || !item.key || seen.has(item.key)) return;
+      seen.add(item.key);
+      html += button(item.key, item.title, true);
+    });
+  }
+  html += '<div class="nav-group-label">MEDIA</div>' +
+    button("images", "Image Library", false) + button("videos", "Video Library", false);
+  Object.keys(SECTION_TITLES).forEach(function (key) {
+    if (seen.has(key) || ["images", "videos"].includes(key)) return;
+    seen.add(key);
+    html += button(key, SECTION_TITLES[key], false);
+  });
+  nav.innerHTML = html;
+};
+
 const loginView = document.getElementById("loginView");
 const appView = document.getElementById("appView");
 const loginForm = document.getElementById("loginForm");
@@ -61,6 +106,9 @@ async function verifyAdministrator() {
     return false;
   }
   showApp(user.email);
+  if (typeof window.syncPortfolioStructure === "function") {
+    await window.syncPortfolioStructure();
+  }
   await renderSection("overview");
   return true;
 }
