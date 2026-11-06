@@ -1,0 +1,36 @@
+# Multi-site CMS foundation
+
+This migration starts the reusable CMS without replacing the existing portfolio CMS.
+
+## What the migration adds
+
+- `cms_sites`: independent website registry.
+- `cms_site_members`: per-website owner/admin/editor/viewer roles.
+- `cms_pages`: pages for each website.
+- `cms_sections`: nested sections, layout keys, and JSON field schemas.
+- `cms_content`: structured content records scoped to a site, page, and section.
+- `cms_media`: media metadata scoped to a site, page, and section.
+- Private `cms-media` storage bucket with per-site upload permissions and published-media read rules.
+- `cms_create_site` and `cms_bootstrap_portfolio_site` RPCs.
+
+## Safety
+
+The migration is additive. It does not drop or rewrite `portfolio_content`, the existing `portfolio-media` bucket, its objects, or its RLS policies. It creates new tables, indexes, functions, triggers, policies, and a separate private bucket. The existing portfolio admin remains the bootstrap authority for the first Portfolio site.
+
+Do not make either media bucket public and do not put a Supabase service-role key in browser code.
+
+## Apply
+
+Run `migrations/20261106_multi_site_cms_foundation.sql` once in the intended Supabase project after reviewing it. Then sign in to the existing portfolio admin with the current authorized administrator account so the first-site bootstrap function can assign that account as the Portfolio site's owner.
+
+The migration is not applied merely by committing this file to Git.
+
+## Website structure discovery
+
+The portfolio admin now reads `../index.html` after a successful administrator login. It discovers semantic `section[id]` elements and `.topic[id]` subsections and builds navigation from their headings/links. Newly added or renamed sections are reflected after the admin is refreshed and signed in again. Subsections are stored under a `topic__` prefix in the legacy portfolio content editor.
+
+This discovery is intentionally read-only: it does not parse arbitrary HTML into editable form fields or rewrite the public page. The CMS schema is designed so a future site-specific manifest can define field types and layout renderers safely.
+
+## Current rollout boundary
+
+The current portfolio CRUD editor still reads and writes the legacy `portfolio_content` table. The new `cms_*` tables are the multi-site foundation and are not yet the active content store for that editor. Do not migrate or delete legacy records until the site selector, schema-driven page/section editor, public renderer, and media workflow have been connected and tested together.
