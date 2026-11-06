@@ -4,12 +4,7 @@ const SUPABASE_URL = "https://lfmbvvwnrhohdifypuyw.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_kwoxePVR6yzu60XODZJhxg_Kngnh01x";
 const MEDIA_BUCKET = "portfolio-media";
 
-const SECTION_TITLES = {
-  about: "About Me", experience: "Experience", projects: "Projects",
-  skills: "Skills", services: "Services", food: "Food Business",
-  farm: "Farm Business", courses: "Courses", contact: "Contact Details",
-  settings: "Website Settings"
-};
+const SECTION_TITLES = {};
 let discoveredMainSections = [];
 let discoveredSubsections = [];
 
@@ -47,11 +42,6 @@ window.__portfolioSetSiteSections = function (mainSections, subsections) {
   }
   html += '<div class="nav-group-label">MEDIA</div>' +
     button("images", "Image Library", false) + button("videos", "Video Library", false);
-  Object.keys(SECTION_TITLES).forEach(function (key) {
-    if (seen.has(key) || ["images", "videos"].includes(key)) return;
-    seen.add(key);
-    html += button(key, SECTION_TITLES[key], false);
-  });
   nav.innerHTML = html;
 };
 
