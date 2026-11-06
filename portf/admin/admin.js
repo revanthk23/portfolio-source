@@ -127,9 +127,9 @@ function renderContentSection(section) {
     '</div><form id="recordForm" class="editor-form"><h3 id="editorTitle">New entry</h3>' +
     '<label>Title<input id="recordTitle" required maxlength="180" placeholder="Entry title"></label>' +
     '<label>Slug (optional)<input id="recordSlug" maxlength="180" placeholder="example-entry"></label>' +
-    '<label>Content (JSON)<textarea id="recordContent" rows="9" spellcheck="false">{
+    `<label>Content (JSON)<textarea id="recordContent" rows="9" spellcheck="false">{
   "description": ""
-}</textarea><small>Use valid JSON. You can add fields such as description, image, date, role, or links.</small></label>' +
+}</textarea><small>Use valid JSON. You can add fields such as description, image, date, role, or links.</small></label>` +
     '<div class="form-row"><label>Status<select id="recordStatus"><option value="draft">Draft</option><option value="published">Published</option></select></label>' +
     '<label>Sort order<input id="recordSort" type="number" value="0"></label></div>' +
     '<div class="form-actions"><button class="primary-button" type="submit">Save entry</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
@@ -144,9 +144,9 @@ function clearEditor() {
   const sort = document.getElementById("recordSort");
   if (sort) sort.value = "0";
   const json = document.getElementById("recordContent");
-  if (json) json.value = '{
+  if (json) json.value = `{
   "description": ""
-}';
+}`;
 }
 function editRecord(id) {
   const record = currentRecords.find(function (item) { return item.id === id; });
