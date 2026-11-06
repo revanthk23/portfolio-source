@@ -23,7 +23,11 @@
   async function load(key) {
     currentKey=key; currentFolder=null;
     const host=document.getElementById("sectionResources");
-    if(!host || !site() || !client()) return;
+    if(!host) return;
+    if(!site() || !client()) {
+      host.innerHTML='<section class="section-resources-card"><h3>Section media & resources</h3><p class="form-hint">The resource manager could not connect to this website\'s CMS site. Your section editor is available, but file uploads need the CMS site connection. Refresh the admin dashboard; if this message remains, report it so the connection can be fixed.</p></section>';
+      return;
+    }
     host.innerHTML='<div class="loading-state">Loading section resources…</div>';
     try {
       const section=await client().from("cms_sections").select("id,page_id,title").eq("site_id",site()).eq("section_key",key).maybeSingle();
