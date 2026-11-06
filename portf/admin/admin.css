@@ -33,3 +33,6 @@
 .media-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .media-preview-heading strong{overflow-wrap:anywhere;font-size:13px}
 .media-preview-large{display:block;width:100%;max-height:76vh;object-fit:contain;background:#070914;border-radius:9px}
+
+.nav-group-label{padding:14px 11px 5px;color:#8885a6;font-size:9px;font-weight:700;letter-spacing:1.7px}
+.nav-subitem{margin-left:12px;padding-left:18px;border-left:1px solid rgba(178,165,255,.22);font-size:12px}
