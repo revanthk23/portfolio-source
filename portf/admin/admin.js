@@ -130,10 +130,11 @@ function renderContentSection(section) {
     `<label>Content (JSON)<textarea id="recordContent" rows="9" spellcheck="false">{
   "description": ""
 }</textarea><small>Use valid JSON. You can add fields such as description, image, date, role, or links.</small></label>` +
-    '<div class="form-row"><label>Status<select id="recordStatus"><option value="draft">Draft</option><option value="published">Published</option></select></label>' +
+    '<div class="form-row"><label>Status<select id="recordStatus"><option value="draft">Draft (not public)</option></select></label>' +
     '<label>Sort order<input id="recordSort" type="number" value="0"></label></div>' +
-    '<div class="form-actions"><button class="primary-button" type="submit">Save entry</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
-    '<p class="form-hint">Saving a record does not automatically update the public website. Public-site integration is a separate step.</p></form></div>';
+    '<div class="form-actions"><button class="primary-button" type="submit">Save Draft</button><button class="secondary-button" type="button" id="previewRecordButton">Preview</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
+    '<div id="previewPanel" class="preview-panel" aria-live="polite"></div>' +
+    '<p class="form-hint">Preview before publishing. Publishing changes the database status only; it does not deploy or change the public website.</p></form></div>';
 }
 function clearEditor() {
   editingId = null;
@@ -160,8 +161,18 @@ function editRecord(id) {
   document.getElementById("recordSort").value = record.sort_order || 0;
   document.getElementById("recordTitle").focus();
 }
-async function saveRecord(event) {
-  event.preventDefault();
+function previewRecord() {
+  const title = document.getElementById("recordTitle").value.trim();
+  let content;
+  try { content = JSON.parse(document.getElementById("recordContent").value || "{}"); }
+  catch (error) { setMessage("Content must be valid JSON: " + error.message, "error"); return; }
+  if (!title) { setMessage("Add a title before previewing.", "error"); return; }
+  const panel = document.getElementById("previewPanel");
+  panel.innerHTML = '<div class="preview-card"><div class="preview-label">CONTENT PREVIEW</div><h4>' + escapeHtml(title) + '</h4><pre>' + escapeHtml(JSON.stringify(content, null, 2)) + '</pre><button class="primary-button" type="button" id="confirmPublishButton">Confirm Publish</button><p>Confirming marks this entry as published in Supabase. It will not deploy changes to the public website.</p></div>';
+  setMessage("Review the preview, then confirm publishing if everything is correct.", "success");
+}
+async function saveRecord(event, statusOverride) {
+  if (event && event.preventDefault) event.preventDefault();
   const title = document.getElementById("recordTitle").value.trim();
   const slug = document.getElementById("recordSlug").value.trim() || null;
   let content;
@@ -172,7 +183,7 @@ async function saveRecord(event) {
     title: title,
     slug: slug,
     content: content,
-    status: document.getElementById("recordStatus").value,
+    status: statusOverride || "draft",
     sort_order: Number(document.getElementById("recordSort").value || 0),
     updated_at: new Date().toISOString()
   };
@@ -271,6 +282,8 @@ contentPanel.addEventListener("click", function (event) {
   if (mediaDel) return deleteMedia(mediaDel.dataset.deleteMedia);
   if (event.target.id === "newRecordButton") return clearEditor();
   if (event.target.id === "cancelEditButton") return clearEditor();
+  if (event.target.id === "previewRecordButton") return previewRecord();
+  if (event.target.id === "confirmPublishButton") return saveRecord(null, "published");
   if (event.target.id === "retryOverview") return renderOverview();
   if (event.target.id === "retrySection") return renderSection(currentSection);
 });
