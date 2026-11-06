@@ -107,7 +107,11 @@ async function verifyAdministrator() {
   }
   showApp(user.email);
   if (typeof window.syncPortfolioStructure === "function") {
-    await window.syncPortfolioStructure();
+    try {
+      await window.syncPortfolioStructure();
+    } catch (structureError) {
+      console.warn("Website structure sync failed; keeping the existing admin navigation.", structureError);
+    }
   }
   await renderSection("overview");
   return true;
