@@ -117,6 +117,9 @@ async function verifyAdministrator() {
   if (typeof window.syncPortfolioStructure === "function") {
     try {
       await window.syncPortfolioStructure();
+      if (window.portfolioCmsSiteId) {
+        await syncCmsStructure();
+      }
     } catch (structureError) {
       console.warn("Website structure sync failed; keeping the existing admin navigation.", structureError);
     }
@@ -135,6 +138,80 @@ function setActiveNavigation(section) {
 function sectionHeader(title, description, action) {
   return '<div class="section-heading"><div><h2>' + escapeHtml(title) + '</h2><p>' +
     escapeHtml(description) + '</p></div>' + (action || "") + '</div>';
+}
+
+async function syncCmsStructure() {
+  const siteId = window.portfolioCmsSiteId;
+  if (!siteId || !supabaseClient) return;
+
+  // Keep a single Home page for the current portfolio while mirroring its
+  // discovered main sections and nested topics into the multi-site schema.
+  let pageResult = await supabaseClient.from("cms_pages")
+    .select("id").eq("site_id", siteId).eq("slug", "home").maybeSingle();
+  if (pageResult.error) throw pageResult.error;
+
+  let pageId = pageResult.data && pageResult.data.id;
+  if (!pageId) {
+    const createdPage = await supabaseClient.from("cms_pages").insert({
+      site_id: siteId, slug: "home", title: "Home", status: "published", sort_order: 0
+    }).select("id").single();
+    if (createdPage.error) throw createdPage.error;
+    pageId = createdPage.data.id;
+  }
+
+  const existingResult = await supabaseClient.from("cms_sections")
+    .select("id,section_key,title,sort_order,parent_section_id")
+    .eq("site_id", siteId).eq("page_id", pageId);
+  if (existingResult.error) throw existingResult.error;
+
+  const existingByKey = new Map((existingResult.data || []).map(function (item) {
+    return [item.section_key, item];
+  }));
+  const sectionIds = new Map();
+
+  async function saveSection(item, parentSectionId, order, type) {
+    if (!item || !item.key || !item.title) return;
+    const existing = existingByKey.get(item.key);
+    if (existing) {
+      const updated = await supabaseClient.from("cms_sections").update({
+        title: item.title,
+        sort_order: order,
+        parent_section_id: parentSectionId || null
+      }).eq("id", existing.id);
+      if (updated.error) throw updated.error;
+      sectionIds.set(item.key, existing.id);
+      return;
+    }
+    const inserted = await supabaseClient.from("cms_sections").insert({
+      site_id: siteId,
+      page_id: pageId,
+      parent_section_id: parentSectionId || null,
+      section_key: item.key,
+      title: item.title,
+      section_type: type,
+      layout_key: "default",
+      field_schema: { type: "object", fields: [] },
+      status: "published",
+      sort_order: order
+    }).select("id").single();
+    if (inserted.error) throw inserted.error;
+    sectionIds.set(item.key, inserted.data.id);
+  }
+
+  for (let i = 0; i < discoveredMainSections.length; i += 1) {
+    await saveSection(discoveredMainSections[i], null, i, "main");
+  }
+  for (let i = 0; i < discoveredSubsections.length; i += 1) {
+    const item = discoveredSubsections[i];
+    const parentId = item.parentKey ? sectionIds.get(item.parentKey) : null;
+    await saveSection(item, parentId, i, "subsection");
+  }
+
+  window.portfolioCmsStructureSynced = {
+    pageId: pageId,
+    mainSections: discoveredMainSections.length,
+    subsections: discoveredSubsections.length
+  };
 }
 function renderOverview() {
   contentPanel.innerHTML = '<div class="loading-state">Loading dashboard statistics…</div>';
