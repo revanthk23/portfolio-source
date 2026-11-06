@@ -481,6 +481,7 @@ async function renderSection(section) {
   if (section === "overview") return renderOverview();
   try {
     if (section === "images" || section === "videos") await loadMedia(section);
+    else if (SECTION_TITLES[section] && window.cmsSectionEditor && window.cmsSectionEditor.supports(section)) await window.cmsSectionEditor.load(section);
     else if (SECTION_TITLES[section]) await loadContentSection(section);
   } catch (error) {
     contentPanel.innerHTML = '<div class="notice error"><strong>Could not load this section</strong><p>' +
@@ -556,6 +557,7 @@ async function start() {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
+  window.portfolioSupabaseClient = supabaseClient;
   const sessionResult = await supabaseClient.auth.getSession();
   if (sessionResult.data && sessionResult.data.session) await verifyAdministrator();
   else showLogin("");
