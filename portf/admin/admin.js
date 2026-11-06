@@ -113,14 +113,29 @@ async function verifyAdministrator() {
     console.info("Multi-site CMS bootstrap is not available yet; continuing with the legacy portfolio CMS.");
   }
   showApp(user.email);
+  let structureDiscovered = false;
   if (typeof window.syncPortfolioStructure === "function") {
     try {
-      await window.syncPortfolioStructure();
-      if (window.portfolioCmsSiteId) {
-        await syncCmsStructure();
-      }
+      const discovered = await window.syncPortfolioStructure();
+      structureDiscovered = !!(discovered && discovered.mainSections && discovered.mainSections.length);
     } catch (structureError) {
-      console.warn("Website structure sync failed; keeping the existing admin navigation.", structureError);
+      console.warn("Website structure discovery failed; trying the saved CMS structure.", structureError);
+    }
+  }
+  if (window.portfolioCmsSiteId) {
+    try {
+      await syncCmsStructure();
+    } catch (cmsSyncError) {
+      console.warn("CMS structure sync could not complete.", cmsSyncError);
+    }
+    // If reading the public HTML fails, rebuild the navigation from the
+    // already-saved CMS hierarchy instead of leaving the admin with no sections.
+    if (!structureDiscovered) {
+      try {
+        await restoreNavigationFromCms();
+      } catch (restoreError) {
+        console.error("Could not restore section navigation from saved CMS records.", restoreError);
+      }
     }
   }
   await renderSection("overview");
@@ -210,6 +225,42 @@ async function syncCmsStructure() {
     pageId: pageId,
     mainSections: discoveredMainSections.length,
     subsections: discoveredSubsections.length
+  };
+}
+async function restoreNavigationFromCms() {
+  if (!window.portfolioCmsSiteId || !supabaseClient) return;
+  const page = await supabaseClient.from("cms_pages")
+    .select("id").eq("site_id", window.portfolioCmsSiteId).eq("slug", "home").maybeSingle();
+  if (page.error) throw page.error;
+  if (!page.data) return;
+  const result = await supabaseClient.from("cms_sections")
+    .select("section_key,title,parent_section_id,sort_order")
+    .eq("site_id", window.portfolioCmsSiteId).eq("page_id", page.data.id)
+    .order("sort_order", { ascending: true });
+  if (result.error) throw result.error;
+  const rows = result.data || [];
+  if (!rows.length) return;
+  const byId = new Map(rows.map(function (row) { return [row.section_key, row]; }));
+  const mainSections = rows.filter(function (row) { return !row.parent_section_id; })
+    .map(function (row) { return { key: row.section_key, title: row.title }; });
+  const subsections = rows.filter(function (row) { return !!row.parent_section_id; })
+    .map(function (row) {
+      const parent = rows.find(function (candidate) {
+        return candidate.id === row.parent_section_id;
+      });
+      return {
+        key: row.section_key,
+        title: row.title,
+        parentKey: parent ? parent.section_key : null
+      };
+    });
+  if (mainSections.length && typeof window.__portfolioSetSiteSections === "function") {
+    window.__portfolioSetSiteSections(mainSections, subsections);
+  }
+  window.portfolioCmsStructureSynced = {
+    pageId: page.data.id,
+    mainSections: mainSections.length,
+    subsections: subsections.length
   };
 }
 function renderOverview() {
