@@ -15,7 +15,7 @@ This migration starts the reusable CMS without replacing the existing portfolio 
 
 ## Safety
 
-The migration is additive. It does not drop or rewrite `portfolio_content`, the existing `portfolio-media` bucket, its objects, or its RLS policies. It creates new tables, indexes, functions, triggers, policies, and a separate private bucket. The existing portfolio admin remains the bootstrap authority for the first Portfolio site.
+The migration is additive. It contains no DROP statements and does not drop or rewrite `portfolio_content`, the existing `portfolio-media` bucket, its objects, or its RLS policies. New CMS foreign keys do not cascade parent deletions into child content. It creates new tables, indexes, functions, triggers, policies, and a separate private bucket. The existing portfolio admin remains the bootstrap authority for the first Portfolio site.
 
 Do not make either media bucket public and do not put a Supabase service-role key in browser code.
 
