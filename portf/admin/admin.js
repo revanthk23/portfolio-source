@@ -272,7 +272,8 @@ function renderContentSection(section) {
     '<label>Sort order<input id="recordSort" type="number" value="0"></label></div>' +
     '<div class="form-actions"><button class="primary-button" type="submit">Save Draft</button><button class="secondary-button" type="button" id="previewRecordButton">Preview</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
     '<div id="previewPanel" class="preview-panel" aria-live="polite"></div>' +
-    '<p class="form-hint">Preview before publishing. Publishing changes the database status only; it does not deploy or change the public website.</p></form></div>';
+    '<p class="form-hint">Preview before publishing. Publishing changes the database status only; it does not deploy or change the public website.</p></form></div><div id="sectionResources"></div>';
+  if (window.sectionResources) window.sectionResources.load(section);
 }
 function clearEditor() {
   editingId = null;
