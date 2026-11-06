@@ -47,11 +47,17 @@
     const subsections = Array.from(doc.querySelectorAll(".topic[id], [data-cms-subsection][id]"))
       .filter(function (node) { return validId.test(node.id); })
       .map(function (node) {
-        const parent = node.closest("section[id]");
+        // Topic panels are often fixed-position sibling sections, so their DOM
+        // parent is not their logical website parent. Find the card/tag that
+        // opens this topic and use the nearest real (non-topic) page section.
+        const opener = Array.from(doc.querySelectorAll("[data-topic]")).find(function (link) {
+          return link.getAttribute("data-topic") === node.id;
+        });
+        const parent = opener ? opener.closest("section[id]:not(.topic)") : null;
         return {
           key: "topic__" + node.id,
           title: titleFor(node, doc),
-          parentKey: parent && parent !== node ? parent.id : null
+          parentKey: parent ? parent.id : null
         };
       });
 
