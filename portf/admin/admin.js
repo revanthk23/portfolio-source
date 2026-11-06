@@ -148,11 +148,15 @@ function clearEditor() {
   if (json) json.value = `{
   "description": ""
 }`;
+  const preview = document.getElementById("previewPanel");
+  if (preview) preview.innerHTML = "";
 }
 function editRecord(id) {
   const record = currentRecords.find(function (item) { return item.id === id; });
   if (!record) return;
   editingId = id;
+  const preview = document.getElementById("previewPanel");
+  if (preview) preview.innerHTML = "";
   document.getElementById("editorTitle").textContent = "Edit entry";
   document.getElementById("recordTitle").value = record.title || "";
   document.getElementById("recordSlug").value = record.slug || "";
@@ -286,6 +290,12 @@ contentPanel.addEventListener("click", function (event) {
   if (event.target.id === "confirmPublishButton") return saveRecord(null, "published");
   if (event.target.id === "retryOverview") return renderOverview();
   if (event.target.id === "retrySection") return renderSection(currentSection);
+});
+contentPanel.addEventListener("input", function (event) {
+  if (event.target.closest("#recordForm")) {
+    const preview = document.getElementById("previewPanel");
+    if (preview) preview.innerHTML = "";
+  }
 });
 contentPanel.addEventListener("submit", function (event) {
   if (event.target.id === "recordForm") saveRecord(event);
