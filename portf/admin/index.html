@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Portfolio Admin</title>
+  <link rel="stylesheet" href="./admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="./admin.js"></script>
+</head>
+<body>
+  <main id="loginView" class="login-wrap">
+    <section class="login-card">
+      <div class="eyebrow">PRIVATE MANAGEMENT</div>
+      <h1>Portfolio Admin</h1>
+      <p class="muted">Sign in with your administrator account.</p>
+      <form id="loginForm">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="loginButton" type="submit">Sign in</button>
+      </form>
+      <p id="loginMessage" class="message" role="status" aria-live="polite"></p>
+      <p class="small muted">Access is restricted to the administrator account.</p>
+    </section>
+  </main>
+
+  <div id="appView" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div><strong>Portfolio</strong><span>MANAGEMENT</span></div>
+      </div>
+      <div class="admin-label">ADMIN WORKSPACE</div>
+      <nav id="sectionNav" aria-label="Portfolio sections">
+        <button class="nav-item active" data-section="overview">Overview</button>
+        <button class="nav-item" data-section="about">About Me</button>
+        <button class="nav-item" data-section="experience">Experience</button>
+        <button class="nav-item" data-section="projects">Projects</button>
+        <button class="nav-item" data-section="skills">Skills</button>
+        <button class="nav-item" data-section="services">Services</button>
+        <button class="nav-item" data-section="food">Food Business</button>
+        <button class="nav-item" data-section="farm">Farm Business</button>
+        <button class="nav-item" data-section="courses">Courses</button>
+        <button class="nav-item" data-section="images">Image Library</button>
+        <button class="nav-item" data-section="videos">Video Library</button>
+        <button class="nav-item" data-section="contact">Contact Details</button>
+        <button class="nav-item" data-section="settings">Website Settings</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <a href="../" target="_blank" rel="noopener">View public website ↗</a>
+        <button id="logoutButton" class="logout-button">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">PRIVATE ADMINISTRATOR AREA</div>
+          <h1 id="pageTitle">Overview</h1>
+        </div>
+        <div class="account-chip"><span class="online-dot"></span><span id="adminEmail">Administrator</span></div>
+      </header>
+      <section id="contentPanel" class="content-panel">
+        <div class="welcome-card">
+          <div class="welcome-icon">✦</div>
+          <div>
+            <h2>Your management workspace is ready</h2>
+            <p>Your sign-in has been verified against the administrator permission in Supabase. This is the secure dashboard foundation; the content editors and media uploader will be connected in the next build stage.</p>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card"><span>SECURITY</span><strong>Protected</strong><p>Supabase Auth + administrator check</p></article>
+          <article class="stat-card"><span>CONTENT</span><strong>Next stage</strong><p>Connect portfolio sections and publishing</p></article>
+          <article class="stat-card"><span>MEDIA</span><strong>Next stage</strong><p>Connect image and video storage</p></article>
+        </div>
+        <div class="notice">
+          <strong>Important</strong>
+          <p>Do not share your password or Supabase service-role/secret key. This dashboard uses only your project URL and public anon/publishable key; database and storage permissions are enforced by Supabase RLS.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <noscript>This admin dashboard requires JavaScript to sign in securely.</noscript>
+</body>
+</html>
