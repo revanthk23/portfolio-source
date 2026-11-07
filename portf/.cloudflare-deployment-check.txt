@@ -1,2 +1,0 @@
-Cloudflare Pages Git integration check.
-This file is intentionally harmless and can be removed after the first successful deployment.
