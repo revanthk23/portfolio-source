@@ -136,8 +136,8 @@
     panel.querySelector("#veValue").value = valueOf(el);
     showMessage("Selected. Edit the field above, then save.");
     var found = await client.from("cms_content").select("id,status,payload")
-      .eq("site_id",siteId).eq("section_id",selectedSection.id).eq("slug","visual:"+key)
-      .order("created_at",{ascending:false}).limit(1).maybeSingle();
+      .eq("site_id",siteId).eq("section_id",selectedSection.id).eq("slug","visual:"+key).eq("status","draft")
+      .order("updated_at",{ascending:false}).limit(1).maybeSingle();
     selectedRecord = found.data || null;
     if (found.error) showMessage("Could not check saved version: "+found.error.message);
     if (selectedRecord && selectedRecord.status === "published") panel.querySelector("#veSelectedName").textContent += " · published version loaded";
@@ -170,10 +170,13 @@
   }
   async function loadPublished() {
     var pub = window.supabase.createClient(URL,KEY,{auth:{persistSession:false,autoRefreshToken:false}});
-    var result = await pub.from("cms_content").select("payload")
-      .eq("status","published");
+    var result = await pub.from("cms_content").select("slug,payload,updated_at")
+      .eq("status","published").order("updated_at",{ascending:false});
     if (result.error) return;
+    var newest = new Set();
     (result.data || []).forEach(function(row){
+      if (newest.has(row.slug)) return;
+      newest.add(row.slug);
       var p=row.payload||{};
       if (!p.visual_editor || !p.element_key) return;
       var el=document.querySelector('[data-ve-key="'+CSS.escape(p.element_key)+'"]');
