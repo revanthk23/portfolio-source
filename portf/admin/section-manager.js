@@ -50,26 +50,26 @@
   }
   function render() {
     return loadRows().then(() => {
-      const parents = rows.filter(row => !row.parent_section_id);
+      const parents = rows;
       panel.innerHTML =
         '<div class="section-heading"><div><h2>Section Manager</h2><p>Create and organize main website sections and nested subsections. Changes are saved to the CMS hierarchy.</p></div><button class="primary-button" id="newCmsSection">+ New section</button></div>' +
         '<div id="sectionManagerMessage" class="page-message" role="status"></div>' +
         '<div class="record-list">' +
         (rows.length ? rows.map(row => {
-          const parent = rows.find(p => p.id === row.parent_section_id);
-          return '<article class="record-card"><div class="record-card-top"><strong>' +
-            (parent ? '↳ ' : '') + esc(row.title) + '</strong><span class="status-pill ' + esc(row.status) + '">' +
+          let depth = 0, parent = rows.find(p => p.id === row.parent_section_id), cursor = parent;
+          while (cursor && depth < 20) { depth++; cursor = rows.find(p => p.id === cursor.parent_section_id); }
+          return '<article class="record-card" style="margin-left:' + (depth * 18) + 'px"><div class="record-card-top"><strong>' +
+            (depth ? '↳ ' : '') + esc(row.title) + '</strong><span class="status-pill ' + esc(row.status) + '">' +
             esc(row.status) + '</span></div><p><code>' + esc(row.section_key) + '</code>' +
-            (parent ? ' · Under ' + esc(parent.title) : ' · Main section') + ' · Order ' + Number(row.sort_order || 0) +
+            (parent ? ' · Under ' + esc(parent.title) : ' · Main section') + ' · Level ' + (depth + 1) + ' · Order ' + Number(row.sort_order || 0) +
             '</p><div class="record-actions"><button class="secondary-button" data-edit-section="' + esc(row.id) + '">Edit</button>' +
             '<button class="danger-button" data-remove-section="' + esc(row.id) + '">Delete</button></div></article>';
         }).join("") : '<p class="empty-state">No sections have been registered yet.</p>') +
         '</div><form id="cmsSectionForm" class="editor-form" hidden><h3 id="cmsSectionFormTitle">New section</h3>' +
         '<label>Section title<input id="cmsSectionTitle" maxlength="120" required placeholder="e.g. Projects"></label>' +
         '<label>Section key<input id="cmsSectionKey" maxlength="70" required placeholder="e.g. projects"><small>Use lowercase letters, numbers and hyphens. Existing keys cannot be changed after creation.</small></label>' +
-        '<label>Section type<select id="cmsSectionType"><option value="main">Main section</option><option value="subsection">Subsection</option></select></label>' +
         '<label>Parent section<select id="cmsSectionParent"><option value="">None — main section</option>' +
-        parents.map(p => '<option value="' + esc(p.id) + '">' + esc(p.title) + '</option>').join("") + '</select></label>' +
+        parents.map(p => '<option value="' + esc(p.id) + '">' + esc(p.title) + ' (' + esc(p.section_key) + ')</option>').join("") + '</select><small>Choose any existing section to create a subsection at any depth. Leave empty for a main section.</small></label>' +
         '<div class="form-row"><label>Status<select id="cmsSectionStatus"><option value="draft">Draft</option><option value="published">Published</option><option value="hidden">Hidden</option></select></label>' +
         '<label>Display order<input id="cmsSectionOrder" type="number" value="0"></label></div>' +
         '<div class="form-actions"><button class="primary-button" type="submit">Save section</button><button class="secondary-button" id="cancelCmsSection" type="button">Cancel</button></div></form>' +
@@ -95,8 +95,17 @@
     document.getElementById("cmsSectionTitle").value = row ? row.title : "";
     document.getElementById("cmsSectionKey").value = row ? row.section_key : "";
     document.getElementById("cmsSectionKey").disabled = !!row;
-    document.getElementById("cmsSectionType").value = row && row.parent_section_id ? "subsection" : "main";
     document.getElementById("cmsSectionParent").value = row ? row.parent_section_id || "" : "";
+    const parentSelect = document.getElementById("cmsSectionParent");
+    Array.from(parentSelect.options).forEach(option => {
+      if (!option.value) return;
+      let cursor = rows.find(item => item.id === option.value), descendant = false;
+      while (cursor) {
+        if (row && cursor.id === row.id) { descendant = true; break; }
+        cursor = cursor.parent_section_id ? rows.find(item => item.id === cursor.parent_section_id) : null;
+      }
+      option.disabled = descendant || (!!row && option.value === row.id);
+    });
     document.getElementById("cmsSectionStatus").value = row ? row.status : "draft";
     document.getElementById("cmsSectionOrder").value = row ? row.sort_order : rows.length;
     form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -117,25 +126,19 @@
       message("Section deleted.", false);
     }
   });
-  panel.addEventListener("change", event => {
-    if (event.target.id === "cmsSectionType") {
-      const parent = document.getElementById("cmsSectionParent");
-      if (event.target.value === "main") parent.value = "";
-    }
-  });
   panel.addEventListener("submit", async event => {
     if (event.target.id !== "cmsSectionForm") return;
     event.preventDefault();
     const title = document.getElementById("cmsSectionTitle").value.trim();
-    const type = document.getElementById("cmsSectionType").value;
-    const parentId = type === "subsection" ? document.getElementById("cmsSectionParent").value || null : null;
+    const parentId = document.getElementById("cmsSectionParent").value || null;
+    const type = parentId ? "subsection" : "main";
     const status = document.getElementById("cmsSectionStatus").value;
     const sort = Number.parseInt(document.getElementById("cmsSectionOrder").value, 10);
     const key = editing ? null : slugify(document.getElementById("cmsSectionKey").value);
     if (!title) return message("Enter a section title.", true);
     if (!editing && (!key || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key))) return message("Enter a valid section key.", true);
     if (type === "subsection" && !parentId) return message("Choose a parent for this subsection.", true);
-    if (editing && parentId) {
+    if (parentId) {
       let cursor = rows.find(row => row.id === parentId);
       while (cursor) {
         if (cursor.id === editing) return message("A section cannot be placed inside itself or one of its own descendants.", true);
