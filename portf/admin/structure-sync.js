@@ -25,28 +25,41 @@
   function parseStructure(source) {
     const doc = new DOMParser().parseFromString(source, "text/html");
     const validId = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-    // Exclude topic panels themselves, not every element that happens to be
-    // nested inside one. Some portfolio layouts place real sections inside wrappers.
-    const mainSections = Array.from(doc.querySelectorAll("section[id]"))
+    const mainNodes = Array.from(doc.querySelectorAll("section[id]"))
       .filter(function (node) {
-        return validId.test(node.id) && !node.classList.contains("topic");
-      })
-      .map(function (node) {
-        return { key: node.id, title: titleFor(node, doc) };
+        return validId.test(node.id) &&
+          !node.classList.contains("topic") &&
+          !node.closest(".topic");
       });
-    const subsections = Array.from(doc.querySelectorAll(".topic[id], [data-cms-subsection][id]"))
-      .filter(function (node) { return validId.test(node.id); })
-      .map(function (node) {
-        const opener = Array.from(doc.querySelectorAll("[data-topic]")).find(function (link) {
-          return link.getAttribute("data-topic") === node.id;
-        });
-        const parent = opener ? opener.closest("section[id]:not(.topic)") : null;
-        return {
-          key: "topic__" + node.id,
-          title: titleFor(node, doc),
-          parentKey: parent ? parent.id : null
-        };
+
+    const subsectionNodes = Array.from(doc.querySelectorAll(
+      "section.topic[id], [data-cms-subsection][id], .topic section[id], .topic article[id]"
+    )).filter(function (node) {
+      return validId.test(node.id) && !node.classList.contains("topic-root-ignore");
+    });
+
+    const mainSections = mainNodes.map(function (node) {
+      return { key: node.id, title: titleFor(node, doc) };
+    });
+    const subsections = subsectionNodes.map(function (node) {
+      const opener = Array.from(doc.querySelectorAll("[data-topic]")).find(function (link) {
+        return link.getAttribute("data-topic") === node.id;
       });
+      // A topic opened from another topic belongs beneath that topic. Otherwise
+      // it belongs to the main section containing its opener or DOM ancestor.
+      const parentTopic = (opener && opener.closest(".topic[id]")) ||
+        node.parentElement && node.parentElement.closest(".topic[id]");
+      const parentMain = (opener && opener.closest("section[id]:not(.topic)")) ||
+        node.parentElement && node.parentElement.closest("section[id]:not(.topic)");
+      const parentKey = parentTopic
+        ? "topic__" + parentTopic.id
+        : parentMain ? parentMain.id : null;
+      return {
+        key: "topic__" + node.id,
+        title: titleFor(node, doc),
+        parentKey: parentKey
+      };
+    });
     return { mainSections: mainSections, subsections: subsections, title: doc.title || "" };
   }
 
