@@ -135,6 +135,13 @@
     if (!title) return message("Enter a section title.", true);
     if (!editing && (!key || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key))) return message("Enter a valid section key.", true);
     if (type === "subsection" && !parentId) return message("Choose a parent for this subsection.", true);
+    if (editing && parentId) {
+      let cursor = rows.find(row => row.id === parentId);
+      while (cursor) {
+        if (cursor.id === editing) return message("A section cannot be placed inside itself or one of its own descendants.", true);
+        cursor = cursor.parent_section_id ? rows.find(row => row.id === cursor.parent_section_id) : null;
+      }
+    }
     const duplicate = rows.find(row => row.section_key === key && row.id !== editing);
     if (duplicate) return message("That section key is already in use.", true);
     const values = { title, parent_section_id: parentId, status, sort_order: Number.isFinite(sort) ? sort : 0,
