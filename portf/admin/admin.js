@@ -561,6 +561,22 @@ async function deleteMedia(name) {
   if (result.error) { setMessage("Delete failed: " + result.error.message, "error"); return; }
   await loadMedia(currentSection);
 }
+async function mountSectionResources(section) {
+  if (window.sectionResources && typeof window.sectionResources.mount === "function") {
+    try {
+      await window.sectionResources.mount(section);
+      return;
+    } catch (error) {
+      console.error("Section resource manager could not mount.", error);
+    }
+  }
+  if (!document.getElementById("sectionResources")) {
+    contentPanel.insertAdjacentHTML("beforeend",
+      '<section class="notice error"><strong>Section media & resources</strong>' +
+      '<p>The resource manager script did not load. The section editor is still available; refresh the admin page ' +
+      'and retry. No content or storage permissions were changed.</p></section>');
+  }
+}
 async function renderSection(section) {
   currentSection = section;
   setActiveNavigation(section);
@@ -579,17 +595,13 @@ async function renderSection(section) {
       }
       // Mount the same independent resource manager after every main-section
       // and subsection editor has rendered, regardless of which editor handled it.
-      if (window.sectionResources && typeof window.sectionResources.mount === "function") {
-        await window.sectionResources.mount(section);
-      }
+      await mountSectionResources(section);
     }
   } catch (error) {
     contentPanel.innerHTML = '<div class="notice error"><strong>Could not load this section</strong><p>' +
       escapeHtml(error.message || "Unknown error") + '</p><button class="secondary-button" id="retrySection">Try again</button></div>';
     // Keep section resources available even if the content editor has a separate error.
-    if (SECTION_TITLES[section] && window.sectionResources && typeof window.sectionResources.mount === "function") {
-      await window.sectionResources.mount(section);
-    }
+    if (SECTION_TITLES[section]) await mountSectionResources(section);
   }
 }
 document.getElementById("sectionNav").addEventListener("click", function (event) {
