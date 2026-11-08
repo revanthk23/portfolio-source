@@ -88,7 +88,7 @@
     var user=await client.auth.getUser();var row=await client.from("cms_media").insert({site_id:siteId,page_id:pageId,section_id:selectedSection.id,storage_path:path,media_type:type,title:file.name,mime_type:file.type,file_size:file.size,status:"draft",created_by:user.data.user.id}).select("id,storage_path,media_type").single();
     if(row.error){await client.storage.from(BUCKET).remove([path]);say("Media record failed: "+row.error.message);return;}
     selectedMedia=row.data;var signed=await client.storage.from(BUCKET).createSignedUrl(path,3600);if(signed.error){say("Upload saved, but preview URL failed: "+signed.error.message);return;}
-    if(type==="video"&&selected.tagName!=="VIDEO"){var video=document.createElement("video");video.controls=true;video.preload="metadata";video.setAttribute("data-ve-new-content",selected.hasAttribute("data-ve-new-content")?"true":"");selected.replaceWith(video);selected=video;selected.className="";keyFor(selected,rootFor(selected));}
+    if(type==="video"&&selected.tagName!=="VIDEO"){var video=document.createElement("video");video.controls=true;video.preload="metadata";if(selected.hasAttribute("data-ve-new-content"))video.setAttribute("data-ve-new-content","true");selected.replaceWith(video);selected=video;selected.className="";keyFor(selected,rootFor(selected));}
     apply(selected,type,signed.data.signedUrl);say("Media uploaded as a draft and previewed. Save this element as a draft; publish will publish both.");
   }
   async function save(status){
