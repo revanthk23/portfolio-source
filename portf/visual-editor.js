@@ -33,7 +33,7 @@
     if (el.tagName === "IMG") return el.getAttribute("src") || "";
     if (el.tagName === "A") return el.getAttribute("href") || "";
     if (el.tagName === "VIDEO" || el.tagName === "SOURCE") return el.getAttribute("src") || "";
-    return el.innerHTML;
+    return el.textContent;
   }
   function applyValue(el, kind, value) {
     if (!el) return;
