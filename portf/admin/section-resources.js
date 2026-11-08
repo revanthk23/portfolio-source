@@ -1,109 +1,499 @@
-// Universal section resource manager: drag/drop files, folders and links for every CMS section.
+// Universal section media & resource manager.
+// Shared by every main section and subsection editor. Uses the private cms-media bucket.
 (function () {
   "use strict";
+
   const BUCKET = "cms-media";
-  let currentKey = null, currentSection = null, currentFolder = null, files = [], records = [];
-  const client = () => window.portfolioSupabaseClient;
-  const site = () => window.portfolioCmsSiteId;
-  const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const say = (s, bad) => { const el=document.getElementById("sectionResourcesMessage"); if(el){el.textContent=s;el.className="page-message "+(bad?"error":"success");} };
-  const fileIcon = row => {
-    const mime=(row.mime_type||"").toLowerCase(), name=(row.title||"").toLowerCase();
-    if(mime.startsWith("image/")) return "🖼️";
-    if(mime.startsWith("video/")) return "🎬";
-    if(mime.startsWith("audio/")) return "🎵";
-    if(mime.includes("pdf")||name.endsWith(".pdf")) return "📕";
-    if(/\.(docx?|odt)$/.test(name)) return "📝";
-    if(/\.(xlsx?|csv|ods)$/.test(name)) return "📊";
-    if(/\.(pptx?|odp)$/.test(name)) return "📽️";
-    if(/\.(zip|rar|7z|tar|gz)$/.test(name)) return "🗜️";
+  let currentKey = null;
+  let currentSection = null;
+  let currentFolder = null;
+  let files = [];
+  let records = [];
+
+  const client = function () { return window.portfolioSupabaseClient; };
+  const site = function () { return window.portfolioCmsSiteId; };
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char];
+    });
+  }
+
+  function say(message, isError) {
+    const element = document.getElementById("sectionResourcesMessage");
+    if (!element) return;
+    element.textContent = message;
+    element.className = "page-message " + (isError ? "error" : "success");
+  }
+
+  function fileIcon(row) {
+    const mime = String(row.mime_type || "").toLowerCase();
+    const name = String(row.title || "").toLowerCase();
+    if (mime.indexOf("image/") === 0) return "🖼️";
+    if (mime.indexOf("video/") === 0) return "🎬";
+    if (mime.indexOf("audio/") === 0) return "🎵";
+    if (mime.indexOf("pdf") !== -1 || name.endsWith(".pdf")) return "📕";
+    if (/\.(docx?|odt|rtf)$/.test(name)) return "📝";
+    if (/\.(xlsx?|csv|ods)$/.test(name)) return "📊";
+    if (/\.(pptx?|odp)$/.test(name)) return "📽️";
+    if (/\.(zip|rar|7z|tar|gz|bz2|xz)$/.test(name)) return "🗜️";
     return "📄";
-  };
-  const sizeLabel = n => n < 1024 ? n+" B" : n < 1048576 ? (n/1024).toFixed(1)+" KB" : (n/1048576).toFixed(1)+" MB";
+  }
+
+  function sizeLabel(size) {
+    const value = Number(size || 0);
+    if (value < 1024) return value + " B";
+    if (value < 1048576) return (value / 1024).toFixed(1) + " KB";
+    return (value / 1048576).toFixed(1) + " MB";
+  }
+
+  function folderForFile(row) {
+    const description = String(row.description || "");
+    return description.indexOf("folder:") === 0 ? (description.slice(7) || null) : null;
+  }
+
+  function folderTrail() {
+    const trail = [];
+    let id = currentFolder;
+    let guard = 0;
+    while (id && guard < 100) {
+      guard += 1;
+      const folder = records.find(function (row) {
+        return row.id === id && row.payload && row.payload.resource_kind === "folder";
+      });
+      if (!folder) break;
+      trail.unshift(folder);
+      id = folder.payload.parent_folder_id || null;
+    }
+    return trail;
+  }
+
+  function mount(key) {
+    const panel = document.getElementById("contentPanel");
+    if (!panel) return Promise.resolve();
+    let host = document.getElementById("sectionResources");
+    if (!host) {
+      panel.insertAdjacentHTML("beforeend",
+        '<div id="sectionResources"><section class="section-resources-card">' +
+        '<h3>Section media & resources</h3><p class="form-hint">Preparing the file manager…</p>' +
+        '</section></div>');
+    }
+    return load(key);
+  }
+
   async function load(key) {
-    currentKey=key; currentFolder=null;
-    const host=document.getElementById("sectionResources");
-    if(!host) return;
-    if(!site() || !client()) {
-      host.innerHTML='<section class="section-resources-card"><h3>Section media & resources</h3><p class="form-hint">The resource manager could not connect to this website\'s CMS site. Your section editor is available, but file uploads need the CMS site connection. Refresh the admin dashboard; if this message remains, report it so the connection can be fixed.</p></section>';
+    currentKey = key;
+    currentFolder = null;
+    currentSection = null;
+    files = [];
+    records = [];
+
+    const host = document.getElementById("sectionResources");
+    if (!host) return;
+
+    if (!site() || !client()) {
+      host.innerHTML = '<section class="section-resources-card"><h3>Section media & resources</h3>' +
+        '<p class="form-hint">The CMS site connection is not available. Refresh the admin dashboard. ' +
+        'If this message remains, the site bootstrap or CMS connection needs attention.</p></section>';
       return;
     }
-    host.innerHTML='<div class="loading-state">Loading section resources…</div>';
+
+    host.innerHTML = '<div class="loading-state">Loading section resources…</div>';
     try {
-      const section=await client().from("cms_sections").select("id,page_id,title").eq("site_id",site()).eq("section_key",key).maybeSingle();
-      if(section.error) throw section.error;
-      if(!section.data) { host.innerHTML='<section class="section-resources-card"><h3>Section resources</h3><p class="form-hint">This section has not synced to the resource library yet. Refresh the admin dashboard and try again.</p></section>'; return; }
-      currentSection=section.data;
+      let query = client().from("cms_sections")
+        .select("id,page_id,title")
+        .eq("site_id", site())
+        .eq("section_key", key);
+      const pageId = (window.portfolioCmsStructureSynced || {}).pageId;
+      if (pageId) query = query.eq("page_id", pageId);
+      const sectionResult = await query.maybeSingle();
+      if (sectionResult.error) throw sectionResult.error;
+      if (!sectionResult.data) {
+        host.innerHTML = '<section class="section-resources-card"><h3>Section media & resources</h3>' +
+          '<p class="form-hint">This section has not synced to the resource library yet. Refresh the admin dashboard ' +
+          'and try again. Existing content has not been changed.</p></section>';
+        return;
+      }
+      currentSection = sectionResult.data;
       await refresh();
-    } catch(e) { host.innerHTML='<section class="section-resources-card"><h3>Section resources</h3><p class="form-hint">Resources could not load: '+esc(e.message)+'</p></section>'; }
+    } catch (error) {
+      host.innerHTML = '<section class="section-resources-card"><h3>Section media & resources</h3>' +
+        '<p class="form-hint">Resources could not load: ' + esc(error.message || "Unknown error") + '</p></section>';
+    }
   }
+
   async function refresh() {
-    const [f,r]=await Promise.all([
-      client().from("cms_media").select("*").eq("site_id",site()).eq("section_id",currentSection.id).order("created_at",{ascending:false}),
-      client().from("cms_content").select("*").eq("site_id",site()).eq("section_id",currentSection.id).order("created_at",{ascending:false})
+    if (!currentSection) return;
+    const results = await Promise.all([
+      client().from("cms_media").select("*")
+        .eq("site_id", site()).eq("section_id", currentSection.id)
+        .order("created_at", { ascending: false }),
+      client().from("cms_content").select("*")
+        .eq("site_id", site()).eq("section_id", currentSection.id)
+        .order("created_at", { ascending: false })
     ]);
-    if(f.error) throw f.error; if(r.error) throw r.error;
-    files=f.data||[]; records=(r.data||[]).filter(x=>x.payload && ["folder","link"].includes(x.payload.resource_kind));
+    if (results[0].error) throw results[0].error;
+    if (results[1].error) throw results[1].error;
+    files = results[0].data || [];
+    records = (results[1].data || []).filter(function (row) {
+      return row.payload && ["folder", "link"].indexOf(row.payload.resource_kind) !== -1;
+    });
     render();
   }
+
   function render() {
-    const host=document.getElementById("sectionResources"); if(!host)return;
-    const folders=records.filter(x=>x.payload.resource_kind==="folder" && (x.payload.parent_folder_id||null)===(currentFolder||null));
-    const links=records.filter(x=>x.payload.resource_kind==="link" && (x.payload.parent_folder_id||null)===(currentFolder||null));
-    const media=files.filter(x=>(x.description||"folder:")==="folder:"+(currentFolder||""));
-    const folderName=currentFolder ? ((records.find(x=>x.id===currentFolder)||{}).title||"Folder") : "";
-    host.innerHTML='<section class="section-resources-card"><div class="resource-heading"><div><h3>Section media & resources</h3><p class="cms-help">Upload any file type here—images, videos, PDFs, Word/Excel/PowerPoint files, audio, archives and more. These files are stored separately from entry content and belong to this section.</p></div><span class="resource-count">'+files.length+' files</span></div>'+
-      '<div id="sectionResourcesMessage" class="page-message" role="status"></div>'+
-      '<div class="resource-dropzone" id="resourceDropzone" tabindex="0" role="button" aria-label="Choose files or drag files here"><div class="resource-drop-icon">⇧</div><strong>Drag and drop files here</strong><span>or click to browse · multiple files supported · any file type</span><input id="resourceFiles" type="file" multiple></div>'+
-      '<div class="resource-toolbar"><div class="resource-create-folder"><input id="resourceFolderName" type="text" placeholder="New folder name"><button class="secondary-button" type="button" id="resourceCreateFolder">Create folder</button></div><div class="resource-create-link"><input id="resourceLinkTitle" type="text" placeholder="Link title"><input id="resourceLinkUrl" type="url" placeholder="https://…"><button class="secondary-button" type="button" id="resourceAddLink">Add link</button></div></div>'+
-      '<div class="resource-breadcrumb"><button class="secondary-button" type="button" id="resourceRoot">All section resources</button>'+(currentFolder?' <span> / '+esc(folderName)+'</span>':"")+'</div>'+
-      '<div id="resourceUploadStatus" class="resource-upload-status" aria-live="polite"></div>'+
-      '<div class="resource-items">'+(folders.map(x=>'<div class="resource-row"><span class="resource-file-icon">📁</span><strong>'+esc(x.title)+'</strong><button class="secondary-button" data-open-folder="'+x.id+'">Open folder</button><button class="secondary-button" data-rename-resource="'+x.id+'">Rename</button><button class="danger-button" data-delete-resource="'+x.id+'">Delete</button></div>').join("")||"")+
-      (links.map(x=>'<div class="resource-row"><span class="resource-file-icon">🔗</span><strong>'+esc(x.title)+'</strong><a href="'+esc(x.payload.url)+'" target="_blank" rel="noopener">Open link ↗</a><button class="secondary-button" data-rename-resource="'+x.id+'">Rename</button><button class="danger-button" data-delete-resource="'+x.id+'">Delete</button></div>').join("")||"")+
-      (media.map(x=>'<div class="resource-row"><span class="resource-file-icon">'+fileIcon(x)+'</span><div class="resource-file-info"><strong>'+esc(x.title)+'</strong><span>'+esc(x.mime_type||"Unknown file type")+' · '+sizeLabel(x.file_size||0)+'</span></div><button class="secondary-button" data-resource-open="'+esc(x.id)+'">Open / download</button><button class="secondary-button" data-rename-file="'+esc(x.id)+'">Rename</button><button class="danger-button" data-delete-file="'+esc(x.id)+'">Delete</button></div>').join("")||"")+
-      ((!folders.length&&!links.length&&!media.length)?'<p class="empty-state">No resources in this folder yet. Drop files above or create a folder or link.</p>':"")+'</div></section>';
+    const host = document.getElementById("sectionResources");
+    if (!host) return;
+
+    const folders = records.filter(function (row) {
+      return row.payload.resource_kind === "folder" &&
+        (row.payload.parent_folder_id || null) === (currentFolder || null);
+    });
+    const links = records.filter(function (row) {
+      return row.payload.resource_kind === "link" &&
+        (row.payload.parent_folder_id || null) === (currentFolder || null);
+    });
+    const media = files.filter(function (row) {
+      return folderForFile(row) === (currentFolder || null);
+    });
+    const trail = folderTrail();
+
+    const breadcrumbs = '<button class="secondary-button" type="button" id="resourceRoot">All section resources</button>' +
+      trail.map(function (folder) {
+        return '<span aria-hidden="true">/</span><button class="secondary-button" type="button" data-open-folder="' +
+          esc(folder.id) + '">' + esc(folder.title) + '</button>';
+      }).join("");
+
+    const folderHtml = folders.map(function (row) {
+      return '<div class="resource-row"><span class="resource-file-icon">📁</span>' +
+        '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>Folder</span></div>' +
+        '<button class="secondary-button" type="button" data-open-folder="' + esc(row.id) + '">Open</button>' +
+        '<button class="secondary-button" type="button" data-rename-resource="' + esc(row.id) + '">Rename</button>' +
+        '<button class="danger-button" type="button" data-delete-resource="' + esc(row.id) + '">Delete</button></div>';
+    }).join("");
+
+    const linkHtml = links.map(function (row) {
+      return '<div class="resource-row"><span class="resource-file-icon">🔗</span>' +
+        '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>Web link</span></div>' +
+        '<a href="' + esc(row.payload.url) + '" target="_blank" rel="noopener noreferrer">Open link ↗</a>' +
+        '<button class="secondary-button" type="button" data-rename-resource="' + esc(row.id) + '">Rename</button>' +
+        '<button class="danger-button" type="button" data-delete-resource="' + esc(row.id) + '">Delete</button></div>';
+    }).join("");
+
+    const mediaHtml = media.map(function (row) {
+      return '<div class="resource-row"><span class="resource-file-icon">' + fileIcon(row) + '</span>' +
+        '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>' +
+        esc(row.mime_type || "Unknown file type") + ' · ' + sizeLabel(row.file_size) + '</span></div>' +
+        '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open / download</button>' +
+        '<button class="secondary-button" type="button" data-rename-file="' + esc(row.id) + '">Rename</button>' +
+        '<button class="danger-button" type="button" data-delete-file="' + esc(row.id) + '">Delete</button></div>';
+    }).join("");
+
+    host.innerHTML = '<section class="section-resources-card">' +
+      '<div class="resource-heading"><div><h3>Section media & resources</h3>' +
+      '<p class="cms-help">A separate file manager for this section. Upload images, videos, PDFs, Word/Excel/PowerPoint ' +
+      'files, audio, archives and other file types. Create folders, subfolders and web links.</p></div>' +
+      '<span class="resource-count">' + files.length + ' files</span></div>' +
+      '<div id="sectionResourcesMessage" class="page-message" role="status" aria-live="polite"></div>' +
+      '<div class="resource-dropzone" id="resourceDropzone">' +
+      '<div class="resource-drop-icon">⇧</div><strong>Drag and drop files here</strong>' +
+      '<span>or click to browse · multiple files supported · any file type</span>' +
+      '<input id="resourceFiles" type="file" multiple aria-label="Choose any files to upload"></div>' +
+      '<div class="resource-toolbar"><div class="resource-create-folder">' +
+      '<input id="resourceFolderName" type="text" maxlength="180" placeholder="New folder or subfolder name">' +
+      '<button class="secondary-button" type="button" id="resourceCreateFolder">Create folder</button></div>' +
+      '<div class="resource-create-link"><input id="resourceLinkTitle" type="text" maxlength="180" placeholder="Link title">' +
+      '<input id="resourceLinkUrl" type="url" placeholder="https://…">' +
+      '<button class="secondary-button" type="button" id="resourceAddLink">Add link</button></div></div>' +
+      '<div class="resource-breadcrumb" aria-label="Folder path">' + breadcrumbs + '</div>' +
+      '<div id="resourceUploadStatus" class="resource-upload-status" aria-live="polite"></div>' +
+      '<div class="resource-items">' + folderHtml + linkHtml + mediaHtml +
+      ((!folderHtml && !linkHtml && !mediaHtml)
+        ? '<p class="empty-state">No resources in this folder yet. Drop files above or create a folder or link.</p>' : "") +
+      '</div></section>';
   }
-  async function createRecord(kind,title,payload) {
-    const r=await client().from("cms_content").insert({site_id:site(),page_id:currentSection.page_id,section_id:currentSection.id,title,slug:null,payload:Object.assign({resource_kind:kind,parent_folder_id:currentFolder},payload),status:"draft",sort_order:0});
-    if(r.error) throw r.error; await refresh();
+
+  async function createRecord(kind, title, payload) {
+    const result = await client().from("cms_content").insert({
+      site_id: site(),
+      page_id: currentSection.page_id,
+      section_id: currentSection.id,
+      title: title,
+      slug: null,
+      payload: Object.assign({
+        resource_kind: kind,
+        parent_folder_id: currentFolder
+      }, payload),
+      status: "draft",
+      sort_order: 0
+    });
+    if (result.error) throw result.error;
+    await refresh();
   }
-  async function upload(list) {
-    const items=Array.from(list||[]); if(!items.length)return;
-    const status=document.getElementById("resourceUploadStatus");
-    for(let i=0;i<items.length;i++){
-      const file=items[i];
-      if(status)status.textContent='Uploading '+(i+1)+' of '+items.length+': '+file.name;
-      const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"-");
-      const path=site()+"/"+currentSection.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+"-"+safeName;
-      const up=await client().storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream"});
-      if(up.error) throw new Error("Could not upload "+file.name+": "+up.error.message);
-      const mime=(file.type||"").toLowerCase();
-      const type=mime.startsWith("image/")?"image":mime.startsWith("video/")?"video":mime.startsWith("audio/")?"audio":"document";
-      const auth=await client().auth.getUser();
-      const ins=await client().from("cms_media").insert({site_id:site(),page_id:currentSection.page_id,section_id:currentSection.id,storage_path:path,media_type:type,title:file.name,description:"folder:"+(currentFolder||""),mime_type:file.type||"application/octet-stream",file_size:file.size,status:"draft",created_by:auth.data.user.id});
-      if(ins.error){await client().storage.from(BUCKET).remove([path]);throw new Error("Uploaded "+file.name+" but could not save its resource record: "+ins.error.message);}
+
+  async function upload(fileList) {
+    const items = Array.from(fileList || []);
+    if (!items.length || !currentSection) return;
+
+    const status = document.getElementById("resourceUploadStatus");
+    let uploadedCount = 0;
+    const failures = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const file = items[index];
+      if (status) status.textContent = "Uploading " + (index + 1) + " of " + items.length + ": " + file.name;
+      let path = null;
+      try {
+        const auth = await client().auth.getUser();
+        if (auth.error || !auth.data || !auth.data.user) {
+          throw new Error("Your administrator session has expired. Sign in again and retry.");
+        }
+
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-180);
+        path = site() + "/" + currentSection.id + "/" + Date.now() + "-" +
+          Math.random().toString(36).slice(2, 9) + "-" + safeName;
+
+        const uploadResult = await client().storage.from(BUCKET).upload(path, file, {
+          upsert: false,
+          contentType: file.type || "application/octet-stream"
+        });
+        if (uploadResult.error) throw new Error(uploadResult.error.message);
+
+        const mime = String(file.type || "").toLowerCase();
+        const mediaType = mime.indexOf("image/") === 0 ? "image" :
+          mime.indexOf("video/") === 0 ? "video" :
+          mime.indexOf("audio/") === 0 ? "audio" : "document";
+
+        const insertResult = await client().from("cms_media").insert({
+          site_id: site(),
+          page_id: currentSection.page_id,
+          section_id: currentSection.id,
+          storage_path: path,
+          media_type: mediaType,
+          title: file.name,
+          description: "folder:" + (currentFolder || ""),
+          mime_type: file.type || "application/octet-stream",
+          file_size: file.size,
+          status: "draft",
+          created_by: auth.data.user.id
+        });
+        if (insertResult.error) {
+          await client().storage.from(BUCKET).remove([path]);
+          path = null;
+          throw new Error("The file uploaded but its resource record could not be saved: " + insertResult.error.message);
+        }
+        uploadedCount += 1;
+      } catch (error) {
+        failures.push(file.name + ": " + (error.message || "Upload failed"));
+      }
     }
-    await refresh(); say(items.length+" file(s) uploaded successfully.");
-  }
-  async function action(event) {
-    const t=event.target.closest("button"); if(!t)return;
+
     try {
-      if(t.id==="resourceCreateFolder"){const v=document.getElementById("resourceFolderName").value.trim();if(!v)return;await createRecord("folder",v,{});say("Folder created.");}
-      if(t.id==="resourceAddLink"){const title=document.getElementById("resourceLinkTitle").value.trim(),url=document.getElementById("resourceLinkUrl").value.trim();if(!title||!/^https?:\/\//i.test(url)){say("Enter a title and a valid http/https link.",true);return;}await createRecord("link",title,{url});say("Link saved.");}
-      if(t.id==="resourceRoot"){currentFolder=null;render();}
-      if(t.dataset.openFolder){currentFolder=t.dataset.openFolder;render();}
-      if(t.dataset.renameResource){const row=records.find(x=>x.id===t.dataset.renameResource);const title=prompt("New name",row.title);if(title&&title.trim()){const r=await client().from("cms_content").update({title:title.trim()}).eq("id",row.id);if(r.error)throw r.error;await refresh();}}
-      if(t.dataset.deleteResource){const row=records.find(x=>x.id===t.dataset.deleteResource);if(confirm("Delete "+row.title+"?")){const r=await client().from("cms_content").delete().eq("id",row.id);if(r.error)throw r.error;await refresh();}}
-      if(t.dataset.renameFile){const row=files.find(x=>x.id===t.dataset.renameFile);const title=prompt("New file name",row.title);if(title&&title.trim()){const r=await client().from("cms_media").update({title:title.trim()}).eq("id",row.id);if(r.error)throw r.error;await refresh();}}
-      if(t.dataset.deleteFile){const row=files.find(x=>x.id===t.dataset.deleteFile);if(confirm("Delete "+row.title+"?")){const rm=await client().storage.from(BUCKET).remove([row.storage_path]);if(rm.error)throw rm.error;const d=await client().from("cms_media").delete().eq("id",row.id);if(d.error)throw d.error;await refresh();}}
-      if(t.dataset.resourceOpen){const row=files.find(x=>x.id===t.dataset.resourceOpen);const u=await client().storage.from(BUCKET).createSignedUrl(row.storage_path,3600,{download:row.title});if(u.error)throw u.error;window.open(u.data.signedUrl,"_blank","noopener");}
-    }catch(e){say(e.message||"Action failed.",true);}
+      await refresh();
+    } catch (error) {
+      say("Upload processing finished, but the resource list could not refresh: " +
+        (error.message || "Unknown error"), true);
+      return;
+    }
+
+    if (failures.length) {
+      say(uploadedCount + " of " + items.length + " file(s) uploaded. " + failures.join(" | "), true);
+    } else {
+      say(uploadedCount + " file(s) uploaded successfully.");
+    }
   }
-  document.addEventListener("click",e=>{if(e.target.closest("#sectionResources"))action(e);});
-  document.addEventListener("change",e=>{if(e.target.id==="resourceFiles"&&e.target.files?.length){upload(e.target.files).catch(err=>say(err.message,true));e.target.value="";}});
-  document.addEventListener("dragover",e=>{if(e.target.closest("#resourceDropzone")){e.preventDefault();document.getElementById("resourceDropzone").classList.add("drag-over");}});
-  document.addEventListener("dragleave",e=>{if(e.target.closest("#resourceDropzone")&&!e.relatedTarget?.closest?.("#resourceDropzone"))document.getElementById("resourceDropzone")?.classList.remove("drag-over");});
-  document.addEventListener("drop",e=>{if(e.target.closest("#resourceDropzone")){e.preventDefault();document.getElementById("resourceDropzone")?.classList.remove("drag-over");upload(e.dataTransfer.files).catch(err=>say(err.message,true));}});
-  document.addEventListener("click",e=>{if(e.target.closest("#resourceDropzone")&&e.target.id!=="resourceFiles")document.getElementById("resourceFiles")?.click();});
-  window.sectionResources={load};
+
+  async function createFolder() {
+    const input = document.getElementById("resourceFolderName");
+    const title = input ? input.value.trim() : "";
+    if (!title) {
+      say("Enter a folder name first.", true);
+      return;
+    }
+    await createRecord("folder", title, {});
+    say("Folder created.");
+  }
+
+  async function addLink() {
+    const titleInput = document.getElementById("resourceLinkTitle");
+    const urlInput = document.getElementById("resourceLinkUrl");
+    const title = titleInput ? titleInput.value.trim() : "";
+    const url = urlInput ? urlInput.value.trim() : "";
+    if (!title || !/^https?:\/\//i.test(url)) {
+      say("Enter a link title and a valid http or https URL.", true);
+      return;
+    }
+    await createRecord("link", title, { url: url });
+    say("Link saved.");
+  }
+
+  function descendantFolderIds(rootId) {
+    const ids = new Set([rootId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      records.forEach(function (row) {
+        if (row.payload && row.payload.resource_kind === "folder" &&
+            row.payload.parent_folder_id && ids.has(row.payload.parent_folder_id) && !ids.has(row.id)) {
+          ids.add(row.id);
+          changed = true;
+        }
+      });
+    }
+    return ids;
+  }
+
+  async function deleteFolderTree(rootId) {
+    const folderIds = descendantFolderIds(rootId);
+    const contentRows = records.filter(function (row) {
+      return folderIds.has(row.id) || (row.payload && folderIds.has(row.payload.parent_folder_id));
+    });
+    const mediaRows = files.filter(function (row) {
+      return folderIds.has(folderForFile(row));
+    });
+    const paths = mediaRows.map(function (row) { return row.storage_path; });
+
+    for (let index = 0; index < paths.length; index += 100) {
+      const removed = await client().storage.from(BUCKET).remove(paths.slice(index, index + 100));
+      if (removed.error) throw removed.error;
+    }
+
+    if (mediaRows.length) {
+      const mediaDelete = await client().from("cms_media").delete()
+        .in("id", mediaRows.map(function (row) { return row.id; }));
+      if (mediaDelete.error) throw mediaDelete.error;
+    }
+
+    if (contentRows.length) {
+      const contentDelete = await client().from("cms_content").delete()
+        .in("id", contentRows.map(function (row) { return row.id; }));
+      if (contentDelete.error) throw contentDelete.error;
+    }
+  }
+
+  async function openFile(row) {
+    // Open a blank tab synchronously during the click gesture so popup blockers
+    // do not discard the later signed-URL navigation.
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      throw new Error("Your browser blocked the new tab. Allow pop-ups for this admin site and try again.");
+    }
+    popup.opener = null;
+    const result = await client().storage.from(BUCKET)
+      .createSignedUrl(row.storage_path, 3600, { download: row.title });
+    if (result.error) {
+      popup.close();
+      throw result.error;
+    }
+    popup.location.href = result.data.signedUrl;
+  }
+
+  async function action(event) {
+    const button = event.target.closest("button");
+    if (!button) return;
+
+    try {
+      if (button.id === "resourceCreateFolder") {
+        await createFolder();
+      } else if (button.id === "resourceAddLink") {
+        await addLink();
+      } else if (button.id === "resourceRoot") {
+        currentFolder = null;
+        render();
+      } else if (button.dataset.openFolder) {
+        currentFolder = button.dataset.openFolder;
+        render();
+      } else if (button.dataset.renameResource) {
+        const row = records.find(function (item) { return item.id === button.dataset.renameResource; });
+        if (!row) return;
+        const title = window.prompt("New display name", row.title);
+        if (title && title.trim()) {
+          const result = await client().from("cms_content").update({ title: title.trim() }).eq("id", row.id);
+          if (result.error) throw result.error;
+          await refresh();
+        }
+      } else if (button.dataset.deleteResource) {
+        const row = records.find(function (item) { return item.id === button.dataset.deleteResource; });
+        if (!row) return;
+        const isFolder = row.payload && row.payload.resource_kind === "folder";
+        const promptText = isFolder
+          ? "Delete folder \"" + row.title + "\" and all of its subfolders, links and files?"
+          : "Delete link \"" + row.title + "\"?";
+        if (window.confirm(promptText)) {
+          if (isFolder) await deleteFolderTree(row.id);
+          else {
+            const result = await client().from("cms_content").delete().eq("id", row.id);
+            if (result.error) throw result.error;
+          }
+          await refresh();
+          say(isFolder ? "Folder and its contents deleted." : "Link deleted.");
+        }
+      } else if (button.dataset.renameFile) {
+        const row = files.find(function (item) { return item.id === button.dataset.renameFile; });
+        if (!row) return;
+        const title = window.prompt("New display name", row.title);
+        if (title && title.trim()) {
+          const result = await client().from("cms_media").update({ title: title.trim() }).eq("id", row.id);
+          if (result.error) throw result.error;
+          await refresh();
+        }
+      } else if (button.dataset.deleteFile) {
+        const row = files.find(function (item) { return item.id === button.dataset.deleteFile; });
+        if (!row) return;
+        if (window.confirm("Delete file \"" + row.title + "\"?")) {
+          const removed = await client().storage.from(BUCKET).remove([row.storage_path]);
+          if (removed.error) throw removed.error;
+          const deleted = await client().from("cms_media").delete().eq("id", row.id);
+          if (deleted.error) throw deleted.error;
+          await refresh();
+          say("File deleted.");
+        }
+      } else if (button.dataset.resourceOpen) {
+        const row = files.find(function (item) { return item.id === button.dataset.resourceOpen; });
+        if (row) await openFile(row);
+      }
+    } catch (error) {
+      say(error.message || "The resource action failed.", true);
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    if (event.target.closest("#sectionResources")) action(event);
+  });
+
+  document.addEventListener("change", function (event) {
+    if (event.target.id === "resourceFiles" && event.target.files && event.target.files.length) {
+      upload(event.target.files);
+      event.target.value = "";
+    }
+  });
+
+  document.addEventListener("dragover", function (event) {
+    if (event.target.closest("#resourceDropzone")) {
+      event.preventDefault();
+      const zone = document.getElementById("resourceDropzone");
+      if (zone) zone.classList.add("drag-over");
+    }
+  });
+
+  document.addEventListener("dragleave", function (event) {
+    if (event.target.closest("#resourceDropzone") &&
+        !(event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest("#resourceDropzone"))) {
+      const zone = document.getElementById("resourceDropzone");
+      if (zone) zone.classList.remove("drag-over");
+    }
+  });
+
+  document.addEventListener("drop", function (event) {
+    if (event.target.closest("#resourceDropzone")) {
+      event.preventDefault();
+      const zone = document.getElementById("resourceDropzone");
+      if (zone) zone.classList.remove("drag-over");
+      upload(event.dataTransfer && event.dataTransfer.files).catch(function (error) {
+        say(error.message || "Upload failed.", true);
+      });
+    }
+  });
+
+  window.sectionResources = { mount: mount, load: load };
 })();
