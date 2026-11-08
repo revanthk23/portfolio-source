@@ -3,21 +3,20 @@
   "use strict";
 
   function cleanTitle(value) {
-    return String(value || "").replace(/\\s+/g, " ").trim();
+    return String(value || "").replace(/\s+/g, " ").trim();
   }
 
   function titleFor(node, doc) {
-    const id = node.id;
-    const links = Array.from(doc.querySelectorAll("a[href]"));
-    const matchingLink = links.find(function (link) {
-      return link.getAttribute("href") === "#" + id;
-    });
-    if (matchingLink && cleanTitle(matchingLink.textContent)) {
-      return cleanTitle(matchingLink.textContent);
-    }
     const heading = node.querySelector("h1, h2, h3, h4");
     if (heading && cleanTitle(heading.textContent)) return cleanTitle(heading.textContent);
-    return id.replace(/[-_]+/g, " ").replace(/\\b\\w/g, function (letter) {
+
+    const id = node.id;
+    const matchingLink = Array.from(doc.querySelectorAll("a[href]")).find(function (link) {
+      return link.getAttribute("href") === "#" + id &&
+        cleanTitle(link.textContent);
+    });
+    if (matchingLink) return cleanTitle(matchingLink.textContent);
+    return id.replace(/[-_]+/g, " ").replace(/\b\w/g, function (letter) {
       return letter.toUpperCase();
     });
   }
@@ -33,34 +32,34 @@
       });
 
     const mainIds = new Set(mainNodes.map(function (node) { return node.id; }));
-    // A subsection can be a topic section or any ID-backed destination opened
-    // by a data-topic link. This also catches nested destinations that are
-    // represented by div/article elements rather than section elements.
     const topicTargetIds = new Set(Array.from(doc.querySelectorAll("[data-topic]"))
-      .map(function (link) { return cleanTitle(link.getAttribute("data-topic")); })
+      .map(function (link) { return String(link.getAttribute("data-topic") || "").trim(); })
       .filter(Boolean));
+
     const subsectionNodes = Array.from(doc.querySelectorAll("[id]")).filter(function (node) {
       return validId.test(node.id) && !mainIds.has(node.id) &&
-        !node.classList.contains("topic-root-ignore") &&
-        (topicTargetIds.has(node.id) || node.matches("section.topic, [data-cms-subsection]"));
+        (topicTargetIds.has(node.id) || node.matches(".topic[id], [data-cms-subsection][id]"));
     });
 
     const mainSections = mainNodes.map(function (node) {
       return { key: node.id, title: titleFor(node, doc) };
     });
+
     const subsections = subsectionNodes.map(function (node) {
+      // Ignore links inside the destination itself (often cards linking back
+      // to their own modal). The first external opener defines its real parent.
       const opener = Array.from(doc.querySelectorAll("[data-topic]")).find(function (link) {
-        return link.getAttribute("data-topic") === node.id;
+        return String(link.getAttribute("data-topic") || "").trim() === node.id &&
+          !node.contains(link);
       });
-      // A topic opened from another topic belongs beneath that topic. Otherwise
-      // it belongs to the main section containing its opener or DOM ancestor.
       const parentTopic = (opener && opener.closest(".topic[id]")) ||
-        node.parentElement && node.parentElement.closest(".topic[id]");
+        (node.parentElement && node.parentElement.closest(".topic[id]"));
       const parentMain = (opener && opener.closest("section[id]:not(.topic)")) ||
-        node.parentElement && node.parentElement.closest("section[id]:not(.topic)");
-      const parentKey = parentTopic
+        (node.parentElement && node.parentElement.closest("section[id]:not(.topic)"));
+      const parentKey = parentTopic && parentTopic.id !== node.id
         ? "topic__" + parentTopic.id
-        : parentMain ? parentMain.id : null;
+        : parentMain && parentMain.id !== node.id ? parentMain.id : null;
+
       return {
         key: "topic__" + node.id,
         title: titleFor(node, doc),
@@ -74,10 +73,12 @@
     // Cloudflare/Netlify projects may be deployed with either the portfolio
     // folder as the site root or the repository root. Try both valid layouts.
     const candidates = [
-      "https://revanthportf.netlify.app/?cms-structure=1",
+      // Prefer the HTML shipped with this exact admin deployment so the
+      // dashboard cannot silently mirror an older Netlify production copy.
       new URL("../index.html", window.location.href).href,
       new URL("/index.html", window.location.origin).href,
-      new URL("/portf/index.html", window.location.origin).href
+      new URL("/portf/index.html", window.location.origin).href,
+      "https://revanthportf.netlify.app/?cms-structure=1"
     ].filter(function (url, index, all) { return all.indexOf(url) === index; });
     const diagnostics = [];
     let structure = null;
