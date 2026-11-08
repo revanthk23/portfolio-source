@@ -42,7 +42,7 @@
       el.setAttribute(attr, value);
       if (kind === "image") el.alt = el.alt || "Portfolio image";
     } else {
-      el.innerHTML = value;
+      el.textContent = value;
     }
   }
   function showMessage(text) { if (message) message.textContent = text; }
