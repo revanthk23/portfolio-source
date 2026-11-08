@@ -184,6 +184,7 @@
       return '<div class="resource-row"><span class="resource-file-icon">' + fileIcon(row) + '</span>' +
         '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>' +
         esc(row.mime_type || "Unknown file type") + ' · ' + sizeLabel(row.file_size) + '</span></div>' +
+        '<button class="secondary-button" type="button" data-resource-preview="' + esc(row.id) + '">Preview</button>' +
         '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open</button>' +
         '<button class="secondary-button" type="button" data-resource-download="' + esc(row.id) + '">Download</button>' +
         '<button class="secondary-button" type="button" data-rename-file="' + esc(row.id) + '">Rename</button>' +
@@ -211,7 +212,10 @@
       '<div class="resource-items">' + folderHtml + linkHtml + mediaHtml +
       ((!folderHtml && !linkHtml && !mediaHtml)
         ? '<p class="empty-state">No resources in this folder yet. Drop files above or create a folder or link.</p>' : "") +
-      '</div></section>';
+      '</div><dialog id="resourcePreviewDialog" class="resource-preview-dialog">' +
+      '<div class="resource-preview-head"><strong id="resourcePreviewTitle">Media preview</strong>' +
+      '<button type="button" class="secondary-button" id="resourcePreviewClose">Close</button></div>' +
+      '<div id="resourcePreviewBody" class="resource-preview-body"></div></dialog></section>';
   }
 
   async function createRecord(kind, title, payload) {
@@ -372,6 +376,40 @@
     }
   }
 
+  async function previewFile(row) {
+    const result = await client().storage.from(BUCKET).createSignedUrl(row.storage_path, 3600);
+    if (result.error) throw result.error;
+    const dialog = document.getElementById("resourcePreviewDialog");
+    const body = document.getElementById("resourcePreviewBody");
+    const title = document.getElementById("resourcePreviewTitle");
+    if (!dialog || !body) throw new Error("Preview panel is not available. Refresh the section and try again.");
+    const url = result.data.signedUrl;
+    const mime = String(row.mime_type || "").toLowerCase();
+    body.replaceChildren();
+    if (mime.indexOf("image/") === 0) {
+      const image = document.createElement("img");
+      image.src = url; image.alt = row.title || "Uploaded image";
+      body.appendChild(image);
+    } else if (mime.indexOf("video/") === 0) {
+      const video = document.createElement("video");
+      video.src = url; video.controls = true; video.autoplay = false; video.preload = "metadata";
+      body.appendChild(video);
+    } else if (mime.indexOf("audio/") === 0) {
+      const audio = document.createElement("audio");
+      audio.src = url; audio.controls = true; body.appendChild(audio);
+    } else if (mime === "application/pdf" || String(row.title || "").toLowerCase().endsWith(".pdf")) {
+      const frame = document.createElement("iframe");
+      frame.src = url; frame.title = "PDF preview"; body.appendChild(frame);
+    } else {
+      const note = document.createElement("p");
+      note.textContent = "This file type may not support an in-page preview. Use Open to view it in a new tab, or Download to save it.";
+      body.appendChild(note);
+    }
+    if (title) title.textContent = row.title || "Media preview";
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else window.open(url, "_blank", "noopener");
+  }
+
   async function openFile(row, forceDownload) {
     // Reserve the new tab synchronously during the click gesture so popup blockers
     // do not discard the later signed-URL navigation.
@@ -450,6 +488,12 @@
           await refresh();
           say("File deleted.");
         }
+      } else if (button.id === "resourcePreviewClose") {
+        const dialog = document.getElementById("resourcePreviewDialog");
+        if (dialog && dialog.open) dialog.close();
+      } else if (button.dataset.resourcePreview) {
+        const row = files.find(function (item) { return item.id === button.dataset.resourcePreview; });
+        if (row) await previewFile(row);
       } else if (button.dataset.resourceOpen || button.dataset.resourceDownload) {
         const id = button.dataset.resourceOpen || button.dataset.resourceDownload;
         const row = files.find(function (item) { return item.id === id; });
