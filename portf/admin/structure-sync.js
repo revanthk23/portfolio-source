@@ -32,10 +32,17 @@
           !node.closest(".topic");
       });
 
-    const subsectionNodes = Array.from(doc.querySelectorAll(
-      "section.topic[id], [data-cms-subsection][id], .topic section[id], .topic article[id]"
-    )).filter(function (node) {
-      return validId.test(node.id) && !node.classList.contains("topic-root-ignore");
+    const mainIds = new Set(mainNodes.map(function (node) { return node.id; }));
+    // A subsection can be a topic section or any ID-backed destination opened
+    // by a data-topic link. This also catches nested destinations that are
+    // represented by div/article elements rather than section elements.
+    const topicTargetIds = new Set(Array.from(doc.querySelectorAll("[data-topic]"))
+      .map(function (link) { return cleanTitle(link.getAttribute("data-topic")); })
+      .filter(Boolean));
+    const subsectionNodes = Array.from(doc.querySelectorAll("[id]")).filter(function (node) {
+      return validId.test(node.id) && !mainIds.has(node.id) &&
+        !node.classList.contains("topic-root-ignore") &&
+        (topicTargetIds.has(node.id) || node.matches("section.topic, [data-cms-subsection]"));
     });
 
     const mainSections = mainNodes.map(function (node) {
