@@ -302,8 +302,8 @@
       }
 
       sections.forEach(function (section) {
-        // The legacy About Me renderer remains responsible for its original table.
-        if (section.section_key === "about") return;
+        // Legacy About Me records are rendered by the compatibility renderer above.
+        // New CMS entries and standalone resources must also be appended to About.
         const targetId = section.section_key.indexOf("topic__") === 0
           ? section.section_key.slice(7) : section.section_key;
         const target = document.getElementById(targetId);
