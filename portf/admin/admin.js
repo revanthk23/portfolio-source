@@ -272,12 +272,12 @@ function renderOverview() {
       const published = rows.filter(function (row) { return row.status === "published"; }).length;
       const drafts = rows.filter(function (row) { return row.status === "draft"; }).length;
       contentPanel.innerHTML =
-        '<div class="welcome-card"><div class="welcome-icon">✦</div><div><h2>Your portfolio workspace</h2><p>Create and manage portfolio content here. New entries are saved as drafts unless you choose Published. Changes in this CMS do not automatically appear on the public website until the separate public-site integration is completed.</p></div></div>' +
+        '<div class="welcome-card"><div class="welcome-icon">✦</div><div><h2>Your portfolio workspace</h2><p>Manage every main section and subsection from one editor. Existing portfolio entries remain editable, and new CMS entries appear on the public website only when published.</p></div></div>' +
         '<div class="stat-grid">' +
         '<article class="stat-card"><span>TOTAL CONTENT</span><strong>' + rows.length + '</strong><p>Records stored in Supabase</p></article>' +
         '<article class="stat-card"><span>PUBLISHED</span><strong>' + published + '</strong><p>Marked as published in the database</p></article>' +
         '<article class="stat-card"><span>DRAFTS</span><strong>' + drafts + '</strong><p>Saved but not published</p></article></div>' +
-        '<div class="notice"><strong>Publishing status</strong><p>Database publishing status is not the same as public website deployment. We will connect the public portfolio after the CMS is tested.</p></div>' +
+        '<div class="notice"><strong>Publishing status</strong><p>Published entries and resources are rendered by the public portfolio. Drafts remain private. Changes are being tested in this development environment; production is not changed.</p></div>' +
         '<div class="quick-links"><h3>Manage a section</h3><div class="quick-grid">' +
         Object.keys(SECTION_TITLES).map(function (key) {
           return '<button class="quick-link" data-go-section="' + key + '">' + escapeHtml(SECTION_TITLES[key]) + ' <span>→</span></button>';
