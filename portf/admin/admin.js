@@ -218,10 +218,28 @@ async function syncCmsStructure() {
   for (let i = 0; i < discoveredMainSections.length; i += 1) {
     await saveSection(discoveredMainSections[i], null, i, "main");
   }
-  for (let i = 0; i < discoveredSubsections.length; i += 1) {
-    const item = discoveredSubsections[i];
-    const parentId = item.parentKey ? sectionIds.get(item.parentKey) : null;
-    await saveSection(item, parentId, i, "subsection");
+
+  // Save nested topics parent-first, independent of their order in the HTML.
+  const pending = discoveredSubsections.slice();
+  const savedKeys = new Set(discoveredMainSections.map(function (item) { return item.key; }));
+  let passes = 0;
+  while (pending.length && passes <= discoveredSubsections.length) {
+    passes += 1;
+    let progressed = false;
+    for (let i = pending.length - 1; i >= 0; i -= 1) {
+      const item = pending[i];
+      if (item.parentKey && !savedKeys.has(item.parentKey)) continue;
+      const parentId = item.parentKey ? sectionIds.get(item.parentKey) : null;
+      await saveSection(item, parentId, discoveredSubsections.indexOf(item), "subsection");
+      savedKeys.add(item.key);
+      pending.splice(i, 1);
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+  if (pending.length) {
+    const unresolved = pending.map(function (item) { return item.key + " → " + (item.parentKey || "no parent"); });
+    throw new Error("Some nested subsections could not be linked to their parent: " + unresolved.join(", "));
   }
 
   window.portfolioCmsStructureSynced = {
