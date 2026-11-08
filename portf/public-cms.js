@@ -340,19 +340,6 @@
         }
         return target;
       }
-      function addPublicNavigation(section) {
-        const nav = document.querySelector(".strap .nav");
-        const targetId = section.section_key.indexOf("topic__") === 0
-          ? section.section_key.slice(7) : section.section_key;
-        // Existing topic overlays are opened by their own cards, not by page anchors.
-        // CMS-created nested sections are ordinary in-page anchors and can be linked.
-        if (!nav || !targetId || section.section_key.indexOf("topic__") === 0 ||
-            nav.querySelector('a[href="#' + CSS.escape(targetId) + '"]')) return;
-        const link = document.createElement("a");
-        link.href = "#" + targetId;
-        link.textContent = (section.parent_section_id ? "↳ " : "") + (section.title || "Section");
-        nav.appendChild(link);
-      }
       function sectionDepth(section) {
         let depth = 0, cursor = section;
         while (cursor && cursor.parent_section_id && depth < 50) {
@@ -366,7 +353,7 @@
           Number(a.sort_order || 0) - Number(b.sort_order || 0);
       }).forEach(function (section) {
         const target = ensureTarget(section);
-        if (target) addPublicNavigation(section);
+        // Keep the public header navigation fixed; CMS sections render in the page only.
       });
 
       sections.forEach(function (section) {
