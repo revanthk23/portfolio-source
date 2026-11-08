@@ -184,7 +184,8 @@
       return '<div class="resource-row"><span class="resource-file-icon">' + fileIcon(row) + '</span>' +
         '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>' +
         esc(row.mime_type || "Unknown file type") + ' · ' + sizeLabel(row.file_size) + '</span></div>' +
-        '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open / download</button>' +
+        '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open</button>' +
+        '<button class="secondary-button" type="button" data-resource-download="' + esc(row.id) + '">Download</button>' +
         '<button class="secondary-button" type="button" data-rename-file="' + esc(row.id) + '">Rename</button>' +
         '<button class="danger-button" type="button" data-delete-file="' + esc(row.id) + '">Delete</button></div>';
     }).join("");
@@ -371,16 +372,17 @@
     }
   }
 
-  async function openFile(row) {
-    // Open a blank tab synchronously during the click gesture so popup blockers
+  async function openFile(row, forceDownload) {
+    // Reserve the new tab synchronously during the click gesture so popup blockers
     // do not discard the later signed-URL navigation.
     const popup = window.open("about:blank", "_blank");
     if (!popup) {
       throw new Error("Your browser blocked the new tab. Allow pop-ups for this admin site and try again.");
     }
     popup.opener = null;
+    const options = forceDownload ? { download: row.title } : { download: false };
     const result = await client().storage.from(BUCKET)
-      .createSignedUrl(row.storage_path, 3600, { download: row.title });
+      .createSignedUrl(row.storage_path, 3600, options);
     if (result.error) {
       popup.close();
       throw result.error;
@@ -448,9 +450,10 @@
           await refresh();
           say("File deleted.");
         }
-      } else if (button.dataset.resourceOpen) {
-        const row = files.find(function (item) { return item.id === button.dataset.resourceOpen; });
-        if (row) await openFile(row);
+      } else if (button.dataset.resourceOpen || button.dataset.resourceDownload) {
+        const id = button.dataset.resourceOpen || button.dataset.resourceDownload;
+        const row = files.find(function (item) { return item.id === id; });
+        if (row) await openFile(row, Boolean(button.dataset.resourceDownload));
       }
     } catch (error) {
       say(error.message || "The resource action failed.", true);
