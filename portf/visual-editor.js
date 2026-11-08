@@ -47,10 +47,11 @@
   }
   function buildToolbar(){
     toolbar=document.createElement("div");toolbar.id="veToolbar";
-    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add content</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-status" id="veStatus" role="status"></div>';
+    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-status" id="veStatus" role="status"></div>';
     document.body.appendChild(toolbar);statusNode=toolbar.querySelector("#veStatus");
     toolbar.querySelector("#veEdit").onclick=editSelected;
     toolbar.querySelector("#veAdd").onclick=addContent;
+    toolbar.querySelector("#veAddMedia").onclick=addMediaBlock;
     toolbar.querySelector("#veMedia").onclick=function(){var input=toolbar.querySelector("#veFile");input.click();};
     toolbar.querySelector("#veFile").onchange=function(){if(this.files&&this.files[0])uploadMedia(this.files[0]);};
     toolbar.querySelector("#veApply").onclick=applyEdit;
@@ -79,6 +80,7 @@
   async function addContent(){
     if(!selected||!selectedSection)return;var root=rootFor(selected),node=document.createElement("p");node.textContent="New content — click Edit to change this text.";node.setAttribute("data-ve-new-content","true");root.appendChild(node);selected=node;await select(node);editSelected();say("New paragraph added at the end of this section. Edit it, then save as draft.");
   }
+  async function addMediaBlock(){if(!selected)return;var root=rootFor(selected),node=document.createElement("img");node.alt="New portfolio image";node.setAttribute("data-ve-new-content","true");node.style.maxWidth="100%";node.style.height="auto";root.appendChild(node);selected=node;await select(node);toolbar.querySelector("#veFile").click();say("Choose an image or video file to add to this section.");}
   async function uploadMedia(file){
     if(!selected||!selectedSection)return;var type=file.type.indexOf("video/")===0?"video":"image";if(type==="image"&&!file.type.startsWith("image/")){say("Choose an image or video file.");return;}
     say("Uploading media…");var safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"-"),path=siteId+"/"+selectedSection.id+"/"+Date.now()+"-"+safe;
