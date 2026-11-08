@@ -52,8 +52,6 @@ window.__portfolioSetSiteSections = function (mainSections, subsections) {
     html += button(item.key, item.title || item.key, 1);
     appendChildren(item.key, 2);
   });
-  html += '<div class="nav-group-label">MEDIA LIBRARY</div>' +
-    button("images", "Image Library", 0) + button("videos", "Video Library", 0);
   nav.innerHTML = html;
 };
 
