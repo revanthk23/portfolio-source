@@ -55,7 +55,7 @@
     toolbar.querySelector("#veFile").onchange=function(){if(this.files&&this.files[0])uploadMedia(this.files[0]);};
     toolbar.querySelector("#veApply").onclick=applyEdit;
     toolbar.querySelector("#veCancel").onclick=cancelEdit;
-    toolbar.querySelector("#vePreview").onclick=function(){cancelEdit();say("Preview mode: changes are shown in the real page layout. Save a draft to keep them private.");};
+    toolbar.querySelector("#vePreview").onclick=previewDraft;
     toolbar.querySelector("#veDraft").onclick=function(){save("draft");};
     toolbar.querySelector("#vePublish").onclick=function(){save("published");};
     toolbar.querySelector("#veExit").onclick=async function(){await client.auth.signOut();location.href=location.pathname;};
@@ -72,6 +72,7 @@
     var found=await client.from("cms_content").select("id,status,payload").eq("site_id",siteId).eq("section_id",selectedSection.id).eq("slug","visual:"+key).eq("status","draft").order("updated_at",{ascending:false}).limit(1).maybeSingle();
     selectedRecord=found.data||null;selectedMedia=null;say(selectedRecord?"Draft exists for this element.":"Selected. Choose an action.");
   }
+  async function previewDraft(){if(!selected){say("Select an item first.");return;}cancelEdit();if(!selectedRecord||!selectedRecord.payload){say("No saved draft for this item yet. Your current on-page changes are already previewed.");return;}var p=selectedRecord.payload;if(p.media_id){var m=await client.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).maybeSingle();if(m.data){var signed=await client.storage.from(BUCKET).createSignedUrl(m.data.storage_path,3600);if(!signed.error)apply(selected,m.data.media_type==="video"?"video":"image",signed.data.signedUrl);}}else apply(selected,p.element_kind,p.element_value);say("Saved draft preview loaded on the actual page. It is still private.");}
   function editSelected(){if(!selected)return;editing=true;var box=toolbar.querySelector("#veEditBox");box.style.display="block";var k=kindOf(selected);toolbar.querySelector("#veText").style.display=k==="text"?"block":"none";toolbar.querySelector("#veUrl").style.display=k==="link"?"block":"none";toolbar.querySelector("#veText").value=valueOf(selected);toolbar.querySelector("#veUrl").value=k==="link"?valueOf(selected):"";if(k==="text"){selected.contentEditable="true";selected.focus();}say("Edit directly on the page, or use the field here. Apply when finished.");positionToolbar(selected);}
   function applyEdit(){if(!selected)return;var k=kindOf(selected);if(k==="text"){selected.contentEditable="false";}else if(k==="link")apply(selected,k,toolbar.querySelector("#veUrl").value.trim());else return;say("Changes previewed on the page. Save as draft or publish.");}
   function cancelEdit(){if(!selected)return;selected.contentEditable="false";toolbar.querySelector("#veEditBox").style.display="none";toolbar.querySelector("#veText").value=valueOf(selected);say("Edit controls closed. Current page is your preview.");}
