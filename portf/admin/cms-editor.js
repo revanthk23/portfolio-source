@@ -92,7 +92,7 @@
       '<label>Description<textarea id="cmsDescription" rows="5" placeholder="Describe this work or subsection content"></textarea></label>' +
       '<label>Upload images or videos<input id="cmsUpload" type="file" accept="image/*,video/*" multiple></label>' +
       '<p class="cms-help">Uploaded files stay in the private CMS media bucket and are associated with this section. Select the media below to attach it to this entry.</p>' +
-      '<div class="form-row"><label>Status<select id="cmsStatus"><option value="draft">Draft (public display not connected yet)</option></select></label>' +
+      '<div class="form-row"><label>Status<select id="cmsStatus"><option value="draft">Draft (private)</option><option value="published">Published (visible on website)</option></select></label>' +
       '<label>Display order<input id="cmsSort" type="number" value="0"></label></div>' +
       '<div class="form-actions"><button class="primary-button" type="submit">Save entry</button>' +
       '<button class="secondary-button" type="button" id="cmsClear">Clear</button></div></form></section>' +
@@ -161,7 +161,22 @@
       description: document.getElementById("cmsDescription").value.trim(),
       media_ids: Array.from(selectedMedia)
     };
-    const status = "draft"; // Keep entries private until the public renderer is implemented and tested.
+    const status = document.getElementById("cmsStatus").value === "published" ? "published" : "draft";
+    const previous = activeRecords.find(function (row) { return row.id === editingContentId; });
+    const previousMediaIds = previous && previous.payload && Array.isArray(previous.payload.media_ids)
+      ? previous.payload.media_ids : [];
+    const mediaToPublish = activeMedia.filter(function (item) {
+      return selectedMedia.has(item.row.id) && item.row.status !== "published";
+    }).map(function (item) { return item.row.id; });
+    if (status === "published" && mediaToPublish.length) {
+      const mediaUpdate = await client().from("cms_media").update({
+        status: "published", published_at: new Date().toISOString()
+      }).eq("site_id", siteId()).in("id", mediaToPublish);
+      if (mediaUpdate.error) {
+        message("Media could not be published: " + mediaUpdate.error.message, "error");
+        return;
+      }
+    }
     const data = {
       site_id: siteId(), page_id: (window.portfolioCmsStructureSynced || {}).pageId,
       section_id: activeSectionId, title: title, slug: null, payload: payload,
@@ -171,9 +186,37 @@
     const result = editingContentId
       ? await client().from("cms_content").update(data).eq("id", editingContentId)
       : await client().from("cms_content").insert(data);
-    if (result.error) { message("Save failed: " + result.error.message, "error"); return; }
+    if (result.error) {
+      if (mediaToPublish.length) {
+        await client().from("cms_media").update({ status: "draft", published_at: null })
+          .eq("site_id", siteId()).in("id", mediaToPublish);
+      }
+      message("Save failed: " + result.error.message, "error");
+      return;
+    }
+
+    // If an entry is moved back to draft, unpublish its old media only when no
+    // other published entry in this site still references those files.
+    if (status === "draft" && previous && previous.status === "published" && previousMediaIds.length) {
+      const remaining = await client().from("cms_content").select("id,payload")
+        .eq("site_id", siteId()).eq("status", "published");
+      if (!remaining.error) {
+        const stillUsed = new Set();
+        (remaining.data || []).forEach(function (row) {
+          (row.payload && Array.isArray(row.payload.media_ids) ? row.payload.media_ids : [])
+            .forEach(function (id) { stillUsed.add(id); });
+        });
+        const safeToDraft = previousMediaIds.filter(function (id) {
+          return !stillUsed.has(id) && !selectedMedia.has(id);
+        });
+        if (safeToDraft.length) {
+          await client().from("cms_media").update({ status: "draft", published_at: null })
+            .eq("site_id", siteId()).in("id", safeToDraft);
+        }
+      }
+    }
     await load(activeSection);
-    message("Entry saved successfully.", "success");
+    message(status === "published" ? "Entry published on the website." : "Entry saved as a private draft.", "success");
   }
   async function remove(id) {
     const row = activeRecords.find(function (item) { return item.id === id; });
