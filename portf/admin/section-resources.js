@@ -73,10 +73,16 @@
     if (!panel) return Promise.resolve();
     let host = document.getElementById("sectionResources");
     if (!host) {
-      panel.insertAdjacentHTML("beforeend",
+      const placeholder =
         '<div id="sectionResources"><section class="section-resources-card">' +
         '<h3>Section media & resources</h3><p class="form-hint">Preparing the file manager…</p>' +
-        '</section></div>');
+        '</section></div>';
+      // Keep the manager near the top of every section. Legacy main-section
+      // editors can be long, which previously pushed this shared panel below
+      // the editor and made it appear to be missing.
+      const heading = panel.querySelector(".section-heading");
+      if (heading) heading.insertAdjacentHTML("afterend", placeholder);
+      else panel.insertAdjacentHTML("afterbegin", placeholder);
     }
     return load(key);
   }
