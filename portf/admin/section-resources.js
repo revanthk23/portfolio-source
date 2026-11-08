@@ -180,7 +180,10 @@
 
     const linkHtml = links.map(function (row) {
       return '<div class="resource-row"><span class="resource-file-icon">🔗</span>' +
-        '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>Web link</span></div>' +
+        '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>Web link · ' +
+        esc(row.status || "draft") + '</span></div>' +
+        '<button class="secondary-button" type="button" data-toggle-link-publish="' + esc(row.id) + '">' +
+        (row.status === "published" ? "Unpublish" : "Publish") + '</button>' +
         '<a href="' + esc(row.payload.url) + '" target="_blank" rel="noopener noreferrer">Open link ↗</a>' +
         '<button class="secondary-button" type="button" data-rename-resource="' + esc(row.id) + '">Rename</button>' +
         '<button class="danger-button" type="button" data-delete-resource="' + esc(row.id) + '">Delete</button></div>';
@@ -189,8 +192,11 @@
     const mediaHtml = media.map(function (row) {
       return '<div class="resource-row"><span class="resource-file-icon">' + fileIcon(row) + '</span>' +
         '<div class="resource-file-info"><strong>' + esc(row.title) + '</strong><span>' +
-        esc(row.mime_type || "Unknown file type") + ' · ' + sizeLabel(row.file_size) + '</span></div>' +
-        '<button class="secondary-button" type="button" data-resource-preview="' + esc(row.id) + '">Preview</button>' +
+        esc(row.mime_type || "Unknown file type") + ' · ' + sizeLabel(row.file_size) + ' · ' +
+        esc(row.status || "draft") + '</span></div>' +
+        '<button class="secondary-button" type="button" data-toggle-media-publish="' + esc(row.id) + '">' +
+        (row.status === "published" ? "Unpublish" : "Publish") + '</button>' +
+        '<button class="secondary-button" type="button" data-resource-preview="' + esc(row.id) + '">Preview</button>'
         '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open</button>' +
         '<button class="secondary-button" type="button" data-resource-download="' + esc(row.id) + '">Download</button>' +
         '<button class="secondary-button" type="button" data-rename-file="' + esc(row.id) + '">Rename</button>' +
@@ -474,6 +480,28 @@
           await refresh();
           say(isFolder ? "Folder and its contents deleted." : "Link deleted.");
         }
+      } else if (button.dataset.toggleMediaPublish) {
+        const row = files.find(function (item) { return item.id === button.dataset.toggleMediaPublish; });
+        if (!row) return;
+        const nextStatus = row.status === "published" ? "draft" : "published";
+        const result = await client().from("cms_media").update({
+          status: nextStatus,
+          published_at: nextStatus === "published" ? new Date().toISOString() : null
+        }).eq("site_id", site()).eq("id", row.id);
+        if (result.error) throw result.error;
+        await refresh();
+        say(nextStatus === "published" ? "File published to the public website." : "File unpublished from the public website.");
+      } else if (button.dataset.toggleLinkPublish) {
+        const row = records.find(function (item) { return item.id === button.dataset.toggleLinkPublish; });
+        if (!row) return;
+        const nextStatus = row.status === "published" ? "draft" : "published";
+        const result = await client().from("cms_content").update({
+          status: nextStatus,
+          published_at: nextStatus === "published" ? new Date().toISOString() : null
+        }).eq("site_id", site()).eq("id", row.id);
+        if (result.error) throw result.error;
+        await refresh();
+        say(nextStatus === "published" ? "Link published to the public website." : "Link unpublished from the public website.");
       } else if (button.dataset.renameFile) {
         const row = files.find(function (item) { return item.id === button.dataset.renameFile; });
         if (!row) return;
