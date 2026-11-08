@@ -15,7 +15,11 @@
   function keyFor(el,root){var section=sectionForRoot(root),prefix=section?section.section_key:root.id;var k=prefix+"__"+pathFor(el,root).replace(/[^a-zA-Z0-9_-]/g,"_");el.setAttribute("data-ve-key",k);return k;}
   function sectionLabel(section){if(!section)return "Unmapped destination";var names=[section.title],parent=section.parent_section_id,guard=0;while(parent&&guard++<30){var p=Array.from(sections.values()).find(function(row){return row.id===parent;});if(!p)break;names.unshift(p.title);parent=p.parent_section_id;}return names.join(" / ");}
   function isContainer(el){return !!el&&(/^(SECTION|ARTICLE|MAIN|ASIDE|NAV)$/.test(el.tagName)||el.classList.contains("topic")||el.hasAttribute("data-cms-subsection")||(el.id&&!!sectionForRoot(el)));}
-  function insertAtSelectedPosition(node){if(!selected)return;if(isContainer(selected)){selected.appendChild(node);return;}if(selected.parentElement)selected.parentElement.insertBefore(node,selected.nextSibling);else{var root=rootFor(selected);if(root)root.appendChild(node);}}
+  function insertAtSelectedPosition(node){
+    if(!selected)return;var root=rootFor(selected);
+    if(isContainer(selected)){node.setAttribute("data-ve-insert-parent",keyFor(selected,root));selected.appendChild(node);}
+    else {node.setAttribute("data-ve-insert-after",keyFor(selected,root));if(selected.parentElement)selected.parentElement.insertBefore(node,selected.nextSibling);else if(root)root.appendChild(node);}
+  }
   function kindOf(el){if(el.tagName==="IMG")return"image";if(el.tagName==="VIDEO"||el.tagName==="SOURCE")return"video";if(el.tagName==="A")return el.hasAttribute("data-ve-media-type")?"document":"link";if(el.tagName==="AUDIO")return"audio";return"text";}
   function valueOf(el){var k=kindOf(el);return ["image","video","audio"].indexOf(k)!==-1?el.getAttribute("src")||"":k==="link"||k==="document"?el.getAttribute("href")||"":el.textContent;}
   function apply(el,k,v){if(!el)return;if(k==="image"||k==="video"||k==="audio")el.setAttribute("src",v);else if(k==="link"||k==="document")el.setAttribute("href",v);else el.textContent=v;}
@@ -146,7 +150,7 @@
   }
   async function save(status){
     if(!selected||!selectedSection)return;selected.contentEditable="false";var root=rootFor(selected),key=keyFor(selected,root),kind=kindOf(selected);
-    var payload={visual_editor:true,element_key:key,section_key:selectedSection.section_key,element_kind:kind,element_value:valueOf(selected),is_new_content:selected.hasAttribute("data-ve-new-content"),element_tag:selected.tagName.toLowerCase()};
+    var payload={visual_editor:true,element_key:key,section_key:selectedSection.section_key,element_kind:kind,element_value:valueOf(selected),is_new_content:selected.hasAttribute("data-ve-new-content"),element_tag:selected.tagName.toLowerCase(),insert_after_key:selected.getAttribute("data-ve-insert-after")||null,insert_parent_key:selected.getAttribute("data-ve-insert-parent")||null};
     if(selectedMedia)payload.media_id=selectedMedia.id;
     var data={site_id:siteId,page_id:pageId,section_id:selectedSection.id,title:"Visual edit: "+key,slug:"visual:"+key,payload:payload,status:status,sort_order:0,published_at:status==="published"?new Date().toISOString():null};
     var result=selectedRecord&&selectedRecord.id?await client.from("cms_content").update(data).eq("id",selectedRecord.id).select("id,status,payload").single():await client.from("cms_content").insert(data).select("id,status,payload").single();
