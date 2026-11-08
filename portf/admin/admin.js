@@ -614,7 +614,7 @@ async function mountSectionResources(section) {
       'and retry. No content or storage permissions were changed.</p></section>');
   }
 }
-async async function renderSection(section) {
+async function renderSection(section) {
   currentSection = section;
   setActiveNavigation(section);
   if (section === "section-manager") {
