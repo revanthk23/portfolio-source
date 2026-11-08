@@ -324,9 +324,6 @@ function renderContentSection(section) {
     '<div class="form-actions"><button class="primary-button" type="submit">Save Draft</button><button class="secondary-button" type="button" id="previewRecordButton">Preview</button><button class="secondary-button" type="button" id="cancelEditButton">Clear</button></div>' +
     '<div id="previewPanel" class="preview-panel" aria-live="polite"></div>' +
     '<p class="form-hint">Preview before publishing. Publishing changes the database status only; it does not deploy or change the public website.</p></form></div>';
-  contentPanel.insertAdjacentHTML("afterbegin", '<div id="sectionResources"><section class="section-resources-card"><h3>Section media & resources</h3><p class="form-hint">Preparing the section file manager…</p></section></div>');
-  if (window.sectionResources && typeof window.sectionResources.load === "function") window.sectionResources.load(section);
-  else document.querySelector("#sectionResources .form-hint").textContent = "The resource manager script did not load. Please share this preview page address so I can verify its deployment."; 
 }
 function clearEditor() {
   editingId = null;
@@ -572,12 +569,27 @@ async function renderSection(section) {
   document.getElementById("pageTitle").textContent = title || "Overview";
   if (section === "overview") return renderOverview();
   try {
-    if (section === "images" || section === "videos") await loadMedia(section);
-    else if (SECTION_TITLES[section] && window.cmsSectionEditor && window.cmsSectionEditor.supports(section)) await window.cmsSectionEditor.load(section);
-    else if (SECTION_TITLES[section]) await loadContentSection(section);
+    if (section === "images" || section === "videos") {
+      await loadMedia(section);
+    } else if (SECTION_TITLES[section]) {
+      if (window.cmsSectionEditor && window.cmsSectionEditor.supports(section)) {
+        await window.cmsSectionEditor.load(section);
+      } else {
+        await loadContentSection(section);
+      }
+      // Mount the same independent resource manager after every main-section
+      // and subsection editor has rendered, regardless of which editor handled it.
+      if (window.sectionResources && typeof window.sectionResources.mount === "function") {
+        await window.sectionResources.mount(section);
+      }
+    }
   } catch (error) {
     contentPanel.innerHTML = '<div class="notice error"><strong>Could not load this section</strong><p>' +
       escapeHtml(error.message || "Unknown error") + '</p><button class="secondary-button" id="retrySection">Try again</button></div>';
+    // Keep section resources available even if the content editor has a separate error.
+    if (SECTION_TITLES[section] && window.sectionResources && typeof window.sectionResources.mount === "function") {
+      await window.sectionResources.mount(section);
+    }
   }
 }
 document.getElementById("sectionNav").addEventListener("click", function (event) {
