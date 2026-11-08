@@ -308,20 +308,25 @@ async function renderOverview() {
     const drafts = cmsEntries.filter(row => row.status === "draft").length;
     const mainSections = sections.filter(row => !row.parent_section_id);
     const childCount = sections.length - mainSections.length;
-    const cards = mainSections.map(function (section) {
-      const descendants = sections.filter(function (row) {
-        let parent = row.parent_section_id;
-        while (parent) {
-          if (parent === section.id) return true;
-          const match = sections.find(item => item.id === parent);
-          parent = match ? match.parent_section_id : null;
-        }
-        return false;
-      });
+    const cards = sections.map(function (section) {
+      let depth = 0;
+      let parent = section.parent_section_id;
+      const ancestry = [];
+      while (parent && depth < 30) {
+        const ancestor = sections.find(function (row) { return row.id === parent; });
+        if (!ancestor) break;
+        ancestry.unshift(ancestor.title);
+        parent = ancestor.parent_section_id;
+        depth += 1;
+      }
+      const levelLabel = depth === 0 ? "MAIN WEBSITE SECTION" :
+        "LEVEL " + (depth + 1) + " · NESTED SUBSECTION";
+      const parentLabel = ancestry.length ? '<span>Under: ' +
+        escapeHtml(ancestry.join(" → ")) + '</span>' : "";
       return '<button class="dashboard-section-card" type="button" data-go-section="' + escapeHtml(section.section_key) + '">' +
-        '<span class="dashboard-section-kicker">MAIN WEBSITE SECTION</span><strong>' + escapeHtml(section.title) +
-        '</strong><span>' + descendants.length + ' subsection(s) · ' + escapeHtml(section.status) +
-        '</span><span class="dashboard-card-action">Manage section →</span></button>';
+        '<span class="dashboard-section-kicker">' + levelLabel + '</span><strong>' + escapeHtml(section.title) +
+        '</strong>' + parentLabel + '<span>Status: ' + escapeHtml(section.status) +
+        '</span><span class="dashboard-card-action">Manage section & add media →</span></button>';
     }).join("");
     contentPanel.innerHTML =
       '<section class="dashboard-welcome"><div><div class="eyebrow">MAIN WEBSITE CONTENT MANAGEMENT</div>' +
