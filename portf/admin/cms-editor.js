@@ -99,9 +99,6 @@
       '<section class="cms-media-panel"><h3>Section media (' + activeMedia.length + ')</h3>' +
       '<p class="cms-help">Tick the files that belong with the entry being edited. Uploads are private until their records are published.</p>' +
       '<div class="cms-media-list">' + (media || '<p class="empty-state">No media uploaded to this section yet.</p>') + '</div></section></div>';
-    panel.insertAdjacentHTML("afterbegin", '<div id="sectionResources"><section class="section-resources-card"><h3>Section media & resources</h3><p class="form-hint">Preparing the section file manager…</p></section></div>');
-    if (window.sectionResources && typeof window.sectionResources.load === "function") window.sectionResources.load(activeSection);
-    else document.querySelector("#sectionResources .form-hint").textContent = "The resource manager script did not load. Please share this preview page address so I can verify its deployment."; 
   }
   function clearForm() {
     editingContentId = null; selectedMedia = new Set();
