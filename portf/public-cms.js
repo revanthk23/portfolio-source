@@ -232,7 +232,7 @@
       const pageId = pageResult.data.id;
 
       const [sectionResult, contentResult] = await Promise.all([
-        client.from("cms_sections").select("id,section_key,title,sort_order")
+        client.from("cms_sections").select("id,section_key,title,sort_order,parent_section_id,section_type")
           .eq("site_id", siteId).eq("page_id", pageId).eq("status", "published")
           .order("sort_order", { ascending: true }),
         client.from("cms_content").select("id,section_id,title,payload,sort_order")
@@ -301,12 +301,70 @@
         }
       }
 
+      // Create public DOM containers for CMS-only sections that do not have
+      // a matching hand-authored HTML section. Existing sections are never replaced.
+      const sectionById = new Map(sections.map(function (row) { return [row.id, row]; }));
+      function ensureTarget(section) {
+        const targetId = section.section_key.indexOf("topic__") === 0
+          ? section.section_key.slice(7) : section.section_key;
+        let target = document.getElementById(targetId);
+        if (target) return target;
+        if (section.parent_section_id) {
+          const parentRow = sectionById.get(section.parent_section_id);
+          if (!parentRow) return null;
+          const parentTargetId = parentRow.section_key.indexOf("topic__") === 0
+            ? parentRow.section_key.slice(7) : parentRow.section_key;
+          const parent = document.getElementById(parentTargetId);
+          if (!parent) return null;
+          target = document.createElement("article");
+          target.id = targetId;
+          target.className = "block glow-tab cms-dynamic-subsection";
+          const heading = document.createElement("h3");
+          heading.textContent = section.title || "Section";
+          target.appendChild(heading);
+          const parentWrap = parent.querySelector(":scope > .wrap") || parent;
+          parentWrap.appendChild(target);
+        } else {
+          const footer = document.querySelector(".site-footer");
+          if (!footer || !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(targetId)) return null;
+          target = document.createElement("section");
+          target.id = targetId;
+          target.className = "grad cms-dynamic-section";
+          const wrap = document.createElement("div");
+          wrap.className = "wrap";
+          const heading = document.createElement("h2");
+          heading.style.cssText = "font-size:44px;color:#f5c451;margin-bottom:24px";
+          heading.textContent = section.title || "Section";
+          wrap.appendChild(heading);
+          target.appendChild(wrap);
+          footer.parentNode.insertBefore(target, footer);
+        }
+        return target;
+      }
+      function addPublicNavigation(section) {
+        const nav = document.querySelector(".strap .nav");
+        const targetId = section.section_key.indexOf("topic__") === 0
+          ? section.section_key.slice(7) : section.section_key;
+        if (!nav || !targetId || nav.querySelector('a[href="#' + CSS.escape(targetId) + '"]')) return;
+        const link = document.createElement("a");
+        link.href = "#" + targetId;
+        link.textContent = section.title || "Section";
+        nav.appendChild(link);
+      }
+      sections.slice().sort(function (a, b) {
+        return Number(!!a.parent_section_id) - Number(!!b.parent_section_id) ||
+          Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      }).forEach(function (section) {
+        const target = ensureTarget(section);
+        if (target && !section.parent_section_id) addPublicNavigation(section);
+      });
+
       sections.forEach(function (section) {
         // Legacy About Me records are rendered by the compatibility renderer above.
         // New CMS entries and standalone resources must also be appended to About.
         const targetId = section.section_key.indexOf("topic__") === 0
           ? section.section_key.slice(7) : section.section_key;
-        const target = document.getElementById(targetId);
+        const target = ensureTarget(section);
         if (!target) return;
 
         let mount = target.querySelector(":scope > .cms-published-content");
