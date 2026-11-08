@@ -21,9 +21,9 @@
     if (el) { el.textContent = text; el.className = "page-message " + (type || ""); }
   }
   function supports(key) {
-    if (!siteId()) return false;
-    return key === "works" || (key.indexOf("topic__") === 0 &&
-      (window.portfolioCmsStructureSynced || {}).subsections > 0);
+    // Every discovered main section and subsection uses the same CMS editor.
+    // Legacy records are still loaded alongside CMS records for compatibility.
+    return !!siteId() && !!key && key !== "overview" && key !== "images" && key !== "videos";
   }
   async function resolveSection(key) {
     const result = await client().from("cms_sections")
@@ -46,15 +46,29 @@
     try {
       const section = await resolveSection(key);
       activeSectionId = section.id;
-      const [contentResult, mediaResult] = await Promise.all([
+      const [contentResult, mediaResult, legacyResult] = await Promise.all([
         client().from("cms_content").select("*").eq("site_id", siteId()).eq("section_id", section.id)
           .order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
         client().from("cms_media").select("*").eq("site_id", siteId()).eq("section_id", section.id)
+          .order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+        client().from("portfolio_content").select("*").eq("section_key", key)
           .order("sort_order", { ascending: true }).order("created_at", { ascending: false })
       ]);
       if (contentResult.error) throw contentResult.error;
       if (mediaResult.error) throw mediaResult.error;
-      activeRecords = (contentResult.data || []).filter(function (row) { return !(row.payload && row.payload.resource_kind); });
+      if (legacyResult.error) throw legacyResult.error;
+      const cmsRecords = (contentResult.data || [])
+        .filter(function (row) { return !(row.payload && row.payload.resource_kind); })
+        .map(function (row) { return Object.assign({}, row, { _source: "cms" }); });
+      const legacyRecords = (legacyResult.data || []).map(function (row) {
+        return Object.assign({}, row, {
+          _source: "legacy",
+          payload: row.content && typeof row.content === "object" ? row.content : {}
+        });
+      });
+      activeRecords = cmsRecords.concat(legacyRecords).sort(function (a, b) {
+        return Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      });
       activeMedia = await Promise.all((mediaResult.data || []).map(signedMedia));
       render(section);
     } catch (error) {
@@ -68,7 +82,8 @@
       const payload = record.payload || {};
       return '<article class="cms-entry"><div class="cms-entry-head"><strong>' + esc(record.title) +
         '</strong><span class="status-pill ' + esc(record.status) + '">' + esc(record.status) + '</span></div>' +
-        '<p>' + esc(payload.subtitle || payload.description || "No description") + '</p>' +
+        '<p>' + esc(payload.subtitle || payload.role || payload.category || payload.description || payload.summary || payload.text || "No description") + '</p>' +
+        (record._source === "legacy" ? '<p class="cms-help">Existing portfolio content · compatibility mode</p>' : '<p class="cms-help">CMS entry</p>') +
         '<div class="record-actions"><button class="secondary-button" data-cms-edit="' + esc(record.id) + '">Edit</button>' +
         '<button class="danger-button" data-cms-delete="' + esc(record.id) + '">Delete</button></div></article>';
     }).join("");
@@ -121,8 +136,8 @@
     const payload = record.payload || {};
     document.getElementById("cmsFormTitle").textContent = "Edit entry";
     document.getElementById("cmsTitle").value = record.title || "";
-    document.getElementById("cmsSubtitle").value = payload.subtitle || "";
-    document.getElementById("cmsDescription").value = payload.description || "";
+    document.getElementById("cmsSubtitle").value = payload.subtitle || payload.role || payload.category || "";
+    document.getElementById("cmsDescription").value = payload.description || payload.summary || payload.text || "";
     document.getElementById("cmsStatus").value = record.status || "draft";
     document.getElementById("cmsSort").value = record.sort_order || 0;
     selectedMedia = new Set(Array.isArray(payload.media_ids) ? payload.media_ids : []);
@@ -160,18 +175,24 @@
     event.preventDefault();
     const title = document.getElementById("cmsTitle").value.trim();
     if (!title) return;
-    const payload = {
-      subtitle: document.getElementById("cmsSubtitle").value.trim(),
-      description: document.getElementById("cmsDescription").value.trim(),
-      media_ids: Array.from(selectedMedia)
-    };
     const status = document.getElementById("cmsStatus").value === "published" ? "published" : "draft";
     const previous = activeRecords.find(function (row) { return row.id === editingContentId; });
+    const payload = previous && previous._source === "legacy"
+      ? Object.assign({}, previous.payload || {}, {
+          subtitle: document.getElementById("cmsSubtitle").value.trim(),
+          description: document.getElementById("cmsDescription").value.trim()
+        })
+      : {
+          subtitle: document.getElementById("cmsSubtitle").value.trim(),
+          description: document.getElementById("cmsDescription").value.trim(),
+          media_ids: Array.from(selectedMedia)
+        };
     const previousMediaIds = previous && previous.payload && Array.isArray(previous.payload.media_ids)
       ? previous.payload.media_ids : [];
-    const mediaToPublish = activeMedia.filter(function (item) {
-      return selectedMedia.has(item.row.id) && item.row.status !== "published";
-    }).map(function (item) { return item.row.id; });
+    const mediaToPublish = previous && previous._source === "legacy" ? [] :
+      activeMedia.filter(function (item) {
+        return selectedMedia.has(item.row.id) && item.row.status !== "published";
+      }).map(function (item) { return item.row.id; });
     if (status === "published" && mediaToPublish.length) {
       const mediaUpdate = await client().from("cms_media").update({
         status: "published", published_at: new Date().toISOString()
@@ -181,15 +202,29 @@
         return;
       }
     }
-    const data = {
-      site_id: siteId(), page_id: (window.portfolioCmsStructureSynced || {}).pageId,
-      section_id: activeSectionId, title: title, slug: null, payload: payload,
-      status: status, sort_order: Number(document.getElementById("cmsSort").value || 0),
-      published_at: status === "published" ? new Date().toISOString() : null
-    };
-    const result = editingContentId
-      ? await client().from("cms_content").update(data).eq("id", editingContentId)
-      : await client().from("cms_content").insert(data);
+    const sortOrder = Number(document.getElementById("cmsSort").value || 0);
+    const result = previous && previous._source === "legacy"
+      ? await client().from("portfolio_content").update({
+          title: title,
+          content: payload,
+          status: status,
+          sort_order: sortOrder,
+          updated_at: new Date().toISOString(),
+          published_at: status === "published" ? new Date().toISOString() : null
+        }).eq("id", editingContentId)
+      : await (editingContentId
+          ? client().from("cms_content").update({
+              site_id: siteId(), page_id: (window.portfolioCmsStructureSynced || {}).pageId,
+              section_id: activeSectionId, title: title, slug: null, payload: payload,
+              status: status, sort_order: sortOrder,
+              published_at: status === "published" ? new Date().toISOString() : null
+            }).eq("id", editingContentId)
+          : client().from("cms_content").insert({
+              site_id: siteId(), page_id: (window.portfolioCmsStructureSynced || {}).pageId,
+              section_id: activeSectionId, title: title, slug: null, payload: payload,
+              status: status, sort_order: sortOrder,
+              published_at: status === "published" ? new Date().toISOString() : null
+            }));
     if (result.error) {
       if (mediaToPublish.length) {
         await client().from("cms_media").update({ status: "draft", published_at: null })
@@ -225,7 +260,9 @@
   async function remove(id) {
     const row = activeRecords.find(function (item) { return item.id === id; });
     if (!row || !window.confirm('Delete "' + row.title + '"?')) return;
-    const result = await client().from("cms_content").delete().eq("id", id);
+    const result = row._source === "legacy"
+      ? await client().from("portfolio_content").delete().eq("id", id)
+      : await client().from("cms_content").delete().eq("id", id);
     if (result.error) { message("Delete failed: " + result.error.message, "error"); return; }
     await load(activeSection);
   }
