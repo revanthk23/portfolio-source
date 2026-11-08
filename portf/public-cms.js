@@ -345,10 +345,13 @@
         const nav = document.querySelector(".strap .nav");
         const targetId = section.section_key.indexOf("topic__") === 0
           ? section.section_key.slice(7) : section.section_key;
-        if (!nav || !targetId || nav.querySelector('a[href="#' + CSS.escape(targetId) + '"]')) return;
+        // Existing topic overlays are opened by their own cards, not by page anchors.
+        // CMS-created nested sections are ordinary in-page anchors and can be linked.
+        if (!nav || !targetId || section.section_key.indexOf("topic__") === 0 ||
+            nav.querySelector('a[href="#' + CSS.escape(targetId) + '"]')) return;
         const link = document.createElement("a");
         link.href = "#" + targetId;
-        link.textContent = section.title || "Section";
+        link.textContent = (section.parent_section_id ? "↳ " : "") + (section.title || "Section");
         nav.appendChild(link);
       }
       sections.slice().sort(function (a, b) {
@@ -356,7 +359,7 @@
           Number(a.sort_order || 0) - Number(b.sort_order || 0);
       }).forEach(function (section) {
         const target = ensureTarget(section);
-        if (target && !section.parent_section_id) addPublicNavigation(section);
+        if (target) addPublicNavigation(section);
       });
 
       sections.forEach(function (section) {
