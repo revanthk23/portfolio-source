@@ -280,18 +280,14 @@ async function renderOverview() {
       supabaseClient.from("cms_sections").select("id,section_key,title,parent_section_id,status,sort_order")
         .eq("site_id", siteId).order("sort_order", { ascending: true }),
       supabaseClient.from("cms_content").select("id,status").eq("site_id", siteId),
-      supabaseClient.from("cms_media").select("id,status,media_type").eq("site_id", siteId),
-      supabaseClient.from("portfolio_content").select("id,status")
+      supabaseClient.from("cms_media").select("id,status,media_type").eq("site_id", siteId)
     ]);
     for (const result of results) if (result.error) throw result.error;
     const sections = results[0].data || [];
     const cmsEntries = results[1].data || [];
     const media = results[2].data || [];
-    const legacy = results[3].data || [];
-    const published = cmsEntries.filter(row => row.status === "published").length +
-      legacy.filter(row => row.status === "published").length;
-    const drafts = cmsEntries.filter(row => row.status === "draft").length +
-      legacy.filter(row => row.status === "draft").length;
+    const published = cmsEntries.filter(row => row.status === "published").length;
+    const drafts = cmsEntries.filter(row => row.status === "draft").length;
     const mainSections = sections.filter(row => !row.parent_section_id);
     const childCount = sections.length - mainSections.length;
     const cards = mainSections.map(function (section) {
@@ -317,7 +313,7 @@ async function renderOverview() {
       '<div class="dashboard-welcome-mark">P</div></section>' +
       '<div class="dashboard-stat-grid">' +
       '<article class="dashboard-stat"><span>MAIN SECTIONS</span><strong>' + mainSections.length + '</strong><small>' + childCount + ' nested subsections</small></article>' +
-      '<article class="dashboard-stat"><span>CONTENT ENTRIES</span><strong>' + (cmsEntries.length + legacy.length) + '</strong><small>' + published + ' published · ' + drafts + ' drafts</small></article>' +
+      '<article class="dashboard-stat"><span>CONTENT ENTRIES</span><strong>' + cmsEntries.length + '</strong><small>' + published + ' published · ' + drafts + ' drafts</small></article>' +
       '<article class="dashboard-stat"><span>MEDIA & RESOURCES</span><strong>' + media.length + '</strong><small>Images, videos, documents, audio and files</small></article>' +
       '</div><div class="dashboard-section-heading"><div><h2>Website sections</h2><p>Select a section to edit its content and manage its resources.</p></div>' +
       '<button class="secondary-button" type="button" data-go-section="section-manager">Edit section structure</button></div>' +
@@ -618,7 +614,7 @@ async function mountSectionResources(section) {
       'and retry. No content or storage permissions were changed.</p></section>');
   }
 }
-async function renderSection(section) {
+async async function renderSection(section) {
   currentSection = section;
   setActiveNavigation(section);
   if (section === "section-manager") {
