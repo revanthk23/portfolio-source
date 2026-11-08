@@ -211,6 +211,8 @@
   }
 
   // Render only explicitly published multi-site CMS entries. Drafts remain private.
+  // Render published multi-site CMS entries and standalone section resources.
+  // Draft content and draft media are never queried by this public client.
   async function loadPublishedCmsSections() {
     if (!window.supabase || !window.supabase.createClient) return;
     const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -240,44 +242,72 @@
       if (sectionResult.error) throw sectionResult.error;
       if (contentResult.error) throw contentResult.error;
 
-      const sectionsById = new Map((sectionResult.data || []).map(function (row) {
-        return [row.id, row];
+      const sections = sectionResult.data || [];
+      if (!sections.length) return;
+      const sectionIds = sections.map(function (row) { return row.id; });
+      const mediaResult = await client.from("cms_media")
+        .select("id,section_id,storage_path,media_type,title,mime_type,alt_text,sort_order")
+        .eq("site_id", siteId).eq("page_id", pageId).eq("status", "published")
+        .in("section_id", sectionIds).order("sort_order", { ascending: true });
+      if (mediaResult.error) throw mediaResult.error;
+
+      const signedMedia = await Promise.all((mediaResult.data || []).map(async function (row) {
+        const result = await client.storage.from("cms-media").createSignedUrl(row.storage_path, 3600);
+        return result.error || !result.data ? null : { row: row, url: result.data.signedUrl };
       }));
-      const entries = contentResult.data || [];
-      const mediaIds = Array.from(new Set(entries.reduce(function (all, row) {
-        const ids = row.payload && Array.isArray(row.payload.media_ids) ? row.payload.media_ids : [];
-        return all.concat(ids.filter(function (id) { return typeof id === "string"; }));
-      }, [])));
-
-      let mediaById = new Map();
-      if (mediaIds.length) {
-        const mediaResult = await client.from("cms_media")
-          .select("id,storage_path,media_type,title,mime_type,alt_text")
-          .eq("site_id", siteId).eq("status", "published").in("id", mediaIds);
-        if (mediaResult.error) throw mediaResult.error;
-        const signed = await Promise.all((mediaResult.data || []).map(async function (row) {
-          const result = await client.storage.from("cms-media").createSignedUrl(row.storage_path, 3600);
-          return result.error ? null : { row: row, url: result.data.signedUrl };
-        }));
-        mediaById = new Map(signed.filter(Boolean).map(function (item) {
-          return [item.row.id, item];
-        }));
-      }
-
+      const mediaById = new Map(signedMedia.filter(Boolean).map(function (item) {
+        return [item.row.id, item];
+      }));
+      const mediaBySection = new Map();
+      mediaById.forEach(function (item) {
+        if (!mediaBySection.has(item.row.section_id)) mediaBySection.set(item.row.section_id, []);
+        mediaBySection.get(item.row.section_id).push(item);
+      });
       const entriesBySection = new Map();
-      entries.forEach(function (entry) {
+      (contentResult.data || []).forEach(function (entry) {
         if (!entriesBySection.has(entry.section_id)) entriesBySection.set(entry.section_id, []);
         entriesBySection.get(entry.section_id).push(entry);
       });
 
-      sectionsById.forEach(function (section) {
+      function appendMedia(container, item) {
+        const row = item.row;
+        if (row.media_type === "image") {
+          const image = document.createElement("img");
+          image.src = item.url;
+          image.alt = row.alt_text || row.title || "";
+          image.loading = "lazy";
+          image.style.maxWidth = "100%";
+          image.style.height = "auto";
+          container.appendChild(image);
+        } else if (row.media_type === "video") {
+          const video = document.createElement("video");
+          video.src = item.url;
+          video.controls = true;
+          video.preload = "metadata";
+          video.style.maxWidth = "100%";
+          container.appendChild(video);
+        } else if (row.media_type === "audio") {
+          const audio = document.createElement("audio");
+          audio.src = item.url;
+          audio.controls = true;
+          container.appendChild(audio);
+        } else {
+          const link = document.createElement("a");
+          link.href = item.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = row.title || "Open file";
+          container.appendChild(link);
+        }
+      }
+
+      sections.forEach(function (section) {
         // The legacy About Me renderer remains responsible for its original table.
         if (section.section_key === "about") return;
         const targetId = section.section_key.indexOf("topic__") === 0
           ? section.section_key.slice(7) : section.section_key;
         const target = document.getElementById(targetId);
-        const sectionEntries = entriesBySection.get(section.id) || [];
-        if (!target || !sectionEntries.length) return;
+        if (!target) return;
 
         let mount = target.querySelector(":scope > .cms-published-content");
         if (!mount) {
@@ -287,14 +317,33 @@
           target.appendChild(mount);
         }
 
-        sectionEntries.forEach(function (entry) {
+        const attachedIds = new Set();
+        (entriesBySection.get(section.id) || []).forEach(function (entry) {
           const payload = entry.payload && typeof entry.payload === "object" ? entry.payload : {};
+          if (payload.resource_kind === "folder") return;
+          if (payload.resource_kind === "link") {
+            const url = typeof payload.url === "string" ? payload.url.trim() : "";
+            if (!/^https?:\/\//i.test(url)) return;
+            const linkCard = document.createElement("article");
+            linkCard.className = "block glow-tab";
+            const linkTitle = document.createElement("h3");
+            linkTitle.textContent = entry.title || "Related link";
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.target = "_blank";
+            anchor.rel = "noopener noreferrer";
+            anchor.textContent = payload.label || url;
+            linkCard.appendChild(linkTitle);
+            linkCard.appendChild(anchor);
+            mount.appendChild(linkCard);
+            return;
+          }
+
           const card = document.createElement("article");
           card.className = "block glow-tab";
           const heading = document.createElement("h3");
           heading.textContent = entry.title || section.title || "Content";
           card.appendChild(heading);
-
           const subtitle = payload.subtitle || payload.category || "";
           if (subtitle) {
             const sub = document.createElement("p");
@@ -317,39 +366,31 @@
               card.appendChild(paragraph);
             });
           }
-
           const mediaWrap = document.createElement("div");
           mediaWrap.className = "cms-published-media";
-          const ids = Array.isArray(payload.media_ids) ? payload.media_ids : [];
-          ids.forEach(function (id) {
+          (Array.isArray(payload.media_ids) ? payload.media_ids : []).forEach(function (id) {
             const item = mediaById.get(id);
-            if (!item) return;
-            const row = item.row;
-            if (row.media_type === "image") {
-              const image = document.createElement("img");
-              image.src = item.url;
-              image.alt = row.alt_text || row.title || "";
-              image.loading = "lazy";
-              image.style.maxWidth = "100%";
-              image.style.height = "auto";
-              mediaWrap.appendChild(image);
-            } else if (row.media_type === "video") {
-              const video = document.createElement("video");
-              video.src = item.url;
-              video.controls = true;
-              video.preload = "metadata";
-              video.style.maxWidth = "100%";
-              mediaWrap.appendChild(video);
-            } else {
-              const link = document.createElement("a");
-              link.href = item.url;
-              link.target = "_blank";
-              link.rel = "noopener noreferrer";
-              link.textContent = row.title || "Open file";
-              mediaWrap.appendChild(link);
-            }
+            if (!item || item.row.section_id !== section.id) return;
+            attachedIds.add(id);
+            appendMedia(mediaWrap, item);
           });
           if (mediaWrap.childNodes.length) card.appendChild(mediaWrap);
+          mount.appendChild(card);
+        });
+
+        // Files published directly from Section media & resources appear without
+        // needing to create a separate content entry or attach them to a card.
+        (mediaBySection.get(section.id) || []).forEach(function (item) {
+          if (attachedIds.has(item.row.id)) return;
+          const card = document.createElement("article");
+          card.className = "block glow-tab cms-published-resource";
+          const heading = document.createElement("h3");
+          heading.textContent = item.row.title || "Published resource";
+          card.appendChild(heading);
+          const mediaWrap = document.createElement("div");
+          mediaWrap.className = "cms-published-media";
+          appendMedia(mediaWrap, item);
+          card.appendChild(mediaWrap);
           mount.appendChild(card);
         });
       });
