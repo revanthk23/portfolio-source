@@ -89,10 +89,12 @@
     }).join("");
     const media = activeMedia.map(function (item) {
       const row = item.row, checked = selectedMedia.has(row.id) ? " checked" : "";
-      const preview = item.url ? (row.media_type === "video"
+      const preview = item.url && row.media_type === "video"
         ? '<video controls preload="metadata" src="' + esc(item.url) + '"></video>'
-        : '<img loading="lazy" src="' + esc(item.url) + '" alt="' + esc(row.alt_text || row.title) + '">')
-        : '<div class="media-unavailable">Preview unavailable</div>';
+        : item.url && row.media_type === "image"
+          ? '<img loading="lazy" src="' + esc(item.url) + '" alt="' + esc(row.alt_text || row.title) + '">'
+          : '<div class="media-file-placeholder"><strong>' + esc(row.media_type || "file").toUpperCase() +
+            '</strong><span>' + esc(row.title || "Uploaded file") + '</span></div>';
       return '<div class="cms-media-item">' + preview +
         '<div class="cms-media-actions">' +
         ((item.url && (row.media_type === "image" || row.media_type === "video"))
@@ -111,7 +113,8 @@
       '<label>Title<input id="cmsTitle" maxlength="180" required placeholder="e.g. Website project"></label>' +
       '<label>Subtitle / category<input id="cmsSubtitle" maxlength="180" placeholder="e.g. Website Development"></label>' +
       '<label>Description<textarea id="cmsDescription" rows="5" placeholder="Describe this work or subsection content"></textarea></label>' +
-      '<label>Upload images or videos<input id="cmsUpload" type="file" accept="image/*,video/*" multiple></label>' +
+      '<label>Additional details / paragraphs<textarea id="cmsParagraphs" rows="4" placeholder="Add one paragraph per line (optional)"></textarea></label>' +
+      '<label>Attach images or videos<input id="cmsUpload" type="file" accept="image/*,video/*" multiple></label>' +
       '<p class="cms-help">Uploaded files stay in the private CMS media bucket and are associated with this section. Select the media below to attach it to this entry.</p>' +
       '<div class="form-row"><label>Status<select id="cmsStatus"><option value="draft">Draft (private)</option><option value="published">Published (visible on website)</option></select></label>' +
       '<label>Display order<input id="cmsSort" type="number" value="0"></label></div>' +
@@ -129,6 +132,8 @@
     if (title) title.textContent = "Add entry";
     const sort = document.getElementById("cmsSort");
     if (sort) sort.value = "0";
+    const paragraphs = document.getElementById("cmsParagraphs");
+    if (paragraphs) paragraphs.value = "";
     document.querySelectorAll("[data-cms-media]").forEach(function (box) { box.checked = false; });
   }
   function edit(id) {
@@ -140,6 +145,7 @@
     document.getElementById("cmsTitle").value = record.title || "";
     document.getElementById("cmsSubtitle").value = payload.subtitle || payload.role || payload.category || "";
     document.getElementById("cmsDescription").value = payload.description || payload.summary || payload.text || "";
+    document.getElementById("cmsParagraphs").value = Array.isArray(payload.paragraphs) ? payload.paragraphs.join("\n") : "";
     document.getElementById("cmsStatus").value = record.status || "draft";
     document.getElementById("cmsSort").value = record.sort_order || 0;
     selectedMedia = new Set(Array.isArray(payload.media_ids) ? payload.media_ids : []);
@@ -179,16 +185,16 @@
     if (!title) return;
     const status = document.getElementById("cmsStatus").value === "published" ? "published" : "draft";
     const previous = activeRecords.find(function (row) { return row.id === editingContentId; });
-    const payload = previous && previous._source === "legacy"
-      ? Object.assign({}, previous.payload || {}, {
-          subtitle: document.getElementById("cmsSubtitle").value.trim(),
-          description: document.getElementById("cmsDescription").value.trim()
-        })
-      : {
-          subtitle: document.getElementById("cmsSubtitle").value.trim(),
-          description: document.getElementById("cmsDescription").value.trim(),
-          media_ids: Array.from(selectedMedia)
-        };
+    const paragraphs = document.getElementById("cmsParagraphs").value
+      .split("\n").map(function (line) { return line.trim(); }).filter(Boolean);
+    const payload = Object.assign({}, previous && previous.payload ? previous.payload : {}, {
+      subtitle: document.getElementById("cmsSubtitle").value.trim(),
+      description: document.getElementById("cmsDescription").value.trim(),
+      paragraphs: paragraphs
+    });
+    if (!previous || previous._source !== "legacy") {
+      payload.media_ids = Array.from(selectedMedia);
+    }
     const previousMediaIds = previous && previous.payload && Array.isArray(previous.payload.media_ids)
       ? previous.payload.media_ids : [];
     const mediaToPublish = previous && previous._source === "legacy" ? [] :
