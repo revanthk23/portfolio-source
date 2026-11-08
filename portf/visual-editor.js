@@ -15,7 +15,7 @@
   function keyFor(el,root){var k=root.id+"__"+pathFor(el,root).replace(/[^a-zA-Z0-9_-]/g,"_");el.setAttribute("data-ve-key",k);return k;}
   function kindOf(el){if(el.tagName==="IMG")return"image";if(el.tagName==="VIDEO"||el.tagName==="SOURCE")return"video";if(el.tagName==="A")return el.hasAttribute("data-ve-media-type")?"document":"link";if(el.tagName==="AUDIO")return"audio";return"text";}
   function valueOf(el){var k=kindOf(el);return ["image","video","audio"].indexOf(k)!==-1?el.getAttribute("src")||"":k==="link"||k==="document"?el.getAttribute("href")||"":el.textContent;}
-  function apply(el,k,v){if(!el)return;if(k==="image"||k==="video")el.setAttribute("src",v);else if(k==="link")el.setAttribute("href",v);else el.textContent=v;}
+  function apply(el,k,v){if(!el)return;if(k==="image"||k==="video"||k==="audio")el.setAttribute("src",v);else if(k==="link"||k==="document")el.setAttribute("href",v);else el.textContent=v;}
   function say(s){if(statusNode)statusNode.textContent=s;}
   function styles(){
     if(document.getElementById("veStyles"))return;
@@ -61,7 +61,7 @@
     var reqButton=document.createElement("button");reqButton.id="veRequirement";reqButton.className="alt";reqButton.textContent="Add requirement / comment";toolbar.querySelector(".ve-actions").appendChild(reqButton);
     reqButton.onclick=function(){toolbar.querySelector("#veRequest").style.display="block";toolbar.querySelector("#veInstruction").focus();positionToolbar(selected);};
     toolbar.querySelector("#veAddMedia").onclick=addMediaBlock;
-    toolbar.querySelector("#veMedia").onclick=function(){var input=toolbar.querySelector("#veFile");input.click();};
+    toolbar.querySelector("#veMedia").onclick=function(){toolbar.querySelector("#veMediaFields").style.display="block";toolbar.querySelector("#veMediaTitle").value=selected&&selected.getAttribute("alt")||selected&&selected.textContent||"";toolbar.querySelector("#veMediaAlt").value=selected&&selected.getAttribute("alt")||"";toolbar.querySelector("#veFile").click();};
     toolbar.querySelector("#veFile").onchange=function(){if(this.files&&this.files[0])uploadMedia(this.files[0]);};
     toolbar.querySelector("#veApply").onclick=applyEdit;
     toolbar.querySelector("#veCancel").onclick=cancelEdit;
@@ -96,7 +96,7 @@
     var found=await client.from("cms_content").select("id,status,payload").eq("site_id",siteId).eq("section_id",selectedSection.id).eq("slug","visual:"+key).eq("status","draft").order("updated_at",{ascending:false}).limit(1).maybeSingle();
     selectedRecord=found.data||null;selectedMedia=null;say(selectedRecord?"Draft exists for this element.":"Selected. Choose an action.");
   }
-  async function previewDraft(){if(!selected){say("Select an item first.");return;}cancelEdit();if(!selectedRecord||!selectedRecord.payload){say("No saved draft for this item yet. Your current on-page changes are already previewed.");return;}var p=selectedRecord.payload;if(p.media_id){var m=await client.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).maybeSingle();if(m.data){var signed=await client.storage.from(BUCKET).createSignedUrl(m.data.storage_path,3600);if(!signed.error)apply(selected,m.data.media_type==="video"?"video":"image",signed.data.signedUrl);}}else apply(selected,p.element_kind,p.element_value);say("Saved draft preview loaded on the actual page. It is still private.");}
+  async function previewDraft(){if(!selected){say("Select an item first.");return;}cancelEdit();if(!selectedRecord||!selectedRecord.payload){say("No saved draft for this item yet. Your current on-page changes are already previewed.");return;}var p=selectedRecord.payload;if(p.media_id){var m=await client.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).maybeSingle();if(m.data){var signed=await client.storage.from(BUCKET).createSignedUrl(m.data.storage_path,3600);if(!signed.error)apply(selected,m.data.media_type==="document"?"link":m.data.media_type,signed.data.signedUrl);}}else apply(selected,p.element_kind,p.element_value);say("Saved draft preview loaded on the actual page. It is still private.");}
   function editSelected(){if(!selected)return;if(selected===rootFor(selected)||selected.matches("article,main,header,footer,nav")){say("This is a layout/container selection. Use Add requirement to describe the structural change; choose a text or media item for direct editing.");return;}editing=true;var box=toolbar.querySelector("#veEditBox");box.style.display="block";var k=kindOf(selected);toolbar.querySelector("#veText").style.display=k==="text"?"block":"none";toolbar.querySelector("#veUrl").style.display=k==="link"?"block":"none";toolbar.querySelector("#veText").value=valueOf(selected);toolbar.querySelector("#veUrl").value=k==="link"?valueOf(selected):"";if(k==="text"){selected.contentEditable="true";selected.focus();}say("Edit directly on the page, or use the field here. Apply when finished.");positionToolbar(selected);}
   function applyEdit(){if(!selected)return;var k=kindOf(selected);if(k==="text"){selected.contentEditable="false";}else if(k==="link")apply(selected,k,toolbar.querySelector("#veUrl").value.trim());else return;say("Changes previewed on the page. Save as draft or publish.");}
   async function saveInstruction(){
