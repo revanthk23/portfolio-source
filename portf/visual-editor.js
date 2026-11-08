@@ -13,8 +13,8 @@
   }
   function pathFor(el,root){var p=[],n=el;while(n&&n!==root){var t=n.tagName.toLowerCase(),i=1,s=n;while((s=s.previousElementSibling))if(s.tagName===n.tagName)i++;p.unshift(t+":nth-of-type("+i+")");n=n.parentElement;}return p.join(">");}
   function keyFor(el,root){var k=root.id+"__"+pathFor(el,root).replace(/[^a-zA-Z0-9_-]/g,"_");el.setAttribute("data-ve-key",k);return k;}
-  function kindOf(el){if(el.tagName==="IMG")return"image";if(el.tagName==="VIDEO"||el.tagName==="SOURCE")return"video";if(el.tagName==="A")return"link";return"text";}
-  function valueOf(el){var k=kindOf(el);return k==="image"||k==="video"?el.getAttribute("src")||"":k==="link"?el.getAttribute("href")||"":el.textContent;}
+  function kindOf(el){if(el.tagName==="IMG")return"image";if(el.tagName==="VIDEO"||el.tagName==="SOURCE")return"video";if(el.tagName==="A")return el.hasAttribute("data-ve-media-type")?"document":"link";if(el.tagName==="AUDIO")return"audio";return"text";}
+  function valueOf(el){var k=kindOf(el);return ["image","video","audio"].indexOf(k)!==-1?el.getAttribute("src")||"":k==="link"||k==="document"?el.getAttribute("href")||"":el.textContent;}
   function apply(el,k,v){if(!el)return;if(k==="image"||k==="video")el.setAttribute("src",v);else if(k==="link")el.setAttribute("href",v);else el.textContent=v;}
   function say(s){if(statusNode)statusNode.textContent=s;}
   function styles(){
@@ -54,7 +54,7 @@
     editToggle=document.createElement("button");editToggle.id="veEditToggle";editToggle.type="button";editToggle.textContent="Enable editing";editToggle.setAttribute("aria-pressed","false");document.body.appendChild(editToggle);
     editToggle.onclick=function(){setEditingEnabled(!editingEnabled);};
     toolbar=document.createElement("div");toolbar.id="veToolbar";
-    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-request" id="veRequest" style="display:none;padding:8px 3px"><label for="veInstruction" style="display:block;color:#f2ca68;font-weight:800;margin-bottom:6px">Instruction / comment for this selection</label><textarea id="veInstruction" placeholder="Describe what should change, or leave feedback for this section…" style="width:100%;box-sizing:border-box;min-height:90px;padding:9px;border-radius:8px;border:1px solid #6f6088;background:#261b39;color:#fff;font:13px system-ui"></textarea><div class="ve-actions" style="margin-top:7px"><button id="veSaveNote">Save requirement</button><button id="veCloseNote" class="alt">Close</button></div><div style="font-size:11px;color:#c9bfd8;margin-top:6px">Saved as a private draft note. It does not change the live website.</div></div><div class="ve-status" id="veStatus" role="status"></div>';
+    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><div id="veMediaFields" style="display:none;padding:8px 3px"><label style="display:block;margin:5px 0;color:#f2ca68">Media title</label><input id="veMediaTitle" type="text" placeholder="Project / media title"><label style="display:block;margin:8px 0 5px;color:#f2ca68">Alt text / caption</label><input id="veMediaAlt" type="text" placeholder="Describe the image or video"><label style="display:block;margin:8px 0 5px;color:#f2ca68">Description (optional)</label><textarea id="veMediaDescription" placeholder="Short description for this media"></textarea><label style="display:block;margin:8px 0 5px;color:#f2ca68">Choose media</label><input id="veFile" type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:block;margin-top:7px;width:100%"></div><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-request" id="veRequest" style="display:none;padding:8px 3px"><label for="veInstruction" style="display:block;color:#f2ca68;font-weight:800;margin-bottom:6px">Instruction / comment for this selection</label><textarea id="veInstruction" placeholder="Describe what should change, or leave feedback for this section…" style="width:100%;box-sizing:border-box;min-height:90px;padding:9px;border-radius:8px;border:1px solid #6f6088;background:#261b39;color:#fff;font:13px system-ui"></textarea><div class="ve-actions" style="margin-top:7px"><button id="veSaveNote">Save requirement</button><button id="veCloseNote" class="alt">Close</button></div><div style="font-size:11px;color:#c9bfd8;margin-top:6px">Saved as a private draft note. It does not change the live website.</div></div><div class="ve-status" id="veStatus" role="status"></div>';
     document.body.appendChild(toolbar);statusNode=toolbar.querySelector("#veStatus");
     toolbar.querySelector("#veEdit").onclick=editSelected;
     toolbar.querySelector("#veAdd").onclick=addContent;
@@ -89,7 +89,7 @@
     var root=rootFor(el);if(!root||!sections.has(root.id)){say("This area is not yet mapped to a CMS section.");return;}
     if(selected)selected.classList.remove("ve-selected");selected=el;selectedSection=sections.get(root.id);selected.classList.add("ve-selected");
     var key=keyFor(el,root);toolbar.querySelector("#veTitle").textContent=(selectedSection.title||root.id)+" · "+kindOf(el);
-    toolbar.querySelector("#veMedia").style.display=(kindOf(el)==="image"||kindOf(el)==="video")?"inline-block":"none";
+    toolbar.querySelector("#veMedia").style.display=(["image","video","audio","document"].indexOf(kindOf(el))!==-1)?"inline-block":"none";
     toolbar.querySelector("#veUrl").style.display=kindOf(el)==="link"?"block":"none";
     toolbar.querySelector("#veText").value=valueOf(el);toolbar.querySelector("#veUrl").value=kindOf(el)==="link"?valueOf(el):"";
     toolbar.querySelector("#veEditBox").style.display="none";toolbar.querySelector("#veRequest").style.display="none";editing=false;toolbar.style.display="block";positionToolbar(el);
@@ -115,16 +115,34 @@
   async function addContent(){
     if(!selected||!selectedSection)return;var root=rootFor(selected),node=document.createElement("p");node.textContent="New content — click Edit to change this text.";node.setAttribute("data-ve-new-content","true");root.appendChild(node);selected=node;await select(node);editSelected();say("New paragraph added at the end of this section. Edit it, then save as draft.");
   }
-  async function addMediaBlock(){if(!selected)return;var root=rootFor(selected),node=document.createElement("img");node.alt="New portfolio image";node.setAttribute("data-ve-new-content","true");node.style.maxWidth="100%";node.style.height="auto";root.appendChild(node);selected=node;await select(node);toolbar.querySelector("#veFile").click();say("Choose an image or video file to add to this section.");}
+  async function addMediaBlock(){
+    if(!selected)return;var root=rootFor(selected),node=document.createElement("div");
+    node.className="ve-media-placeholder";node.textContent="New media will appear here after upload";
+    node.setAttribute("data-ve-new-content","true");node.style.cssText="padding:24px;border:1px dashed currentColor;border-radius:12px;text-align:center";
+    root.appendChild(node);selected=node;await select(node);toolbar.querySelector("#veMediaFields").style.display="block";
+    toolbar.querySelector("#veMediaTitle").value="";toolbar.querySelector("#veMediaAlt").value="";
+    toolbar.querySelector("#veMediaDescription").value="";toolbar.querySelector("#veFile").value="";
+    say("Add a title, caption and optional description, then choose an image, video, audio or document.");
+  }
   async function uploadMedia(file){
-    if(!selected||!selectedSection)return;var type=file.type.indexOf("video/")===0?"video":"image";if(type==="image"&&!file.type.startsWith("image/")){say("Choose an image or video file.");return;}
+    if(!selected||!selectedSection)return;
+    var mime=String(file.type||"").toLowerCase();
+    var type=mime.indexOf("video/")===0?"video":mime.indexOf("audio/")===0?"audio":mime.indexOf("image/")===0?"image":"document";
     say("Uploading media…");var safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"-"),path=siteId+"/"+selectedSection.id+"/"+Date.now()+"-"+safe;
     var up=await client.storage.from(BUCKET).upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||undefined});if(up.error){say("Upload failed: "+up.error.message);return;}
-    var user=await client.auth.getUser();var row=await client.from("cms_media").insert({site_id:siteId,page_id:pageId,section_id:selectedSection.id,storage_path:path,media_type:type,title:file.name,mime_type:file.type,file_size:file.size,status:"draft",created_by:user.data.user.id}).select("id,storage_path,media_type").single();
+    var user=await client.auth.getUser(),mediaTitle=toolbar.querySelector("#veMediaTitle").value.trim()||file.name;
+    var mediaAlt=toolbar.querySelector("#veMediaAlt").value.trim(),mediaDescription=toolbar.querySelector("#veMediaDescription").value.trim();
+    var row=await client.from("cms_media").insert({site_id:siteId,page_id:pageId,section_id:selectedSection.id,storage_path:path,media_type:type,title:mediaTitle,alt_text:mediaAlt,description:mediaDescription,mime_type:file.type||"application/octet-stream",file_size:file.size,status:"draft",created_by:user.data.user.id}).select("id,storage_path,media_type").single();
     if(row.error){await client.storage.from(BUCKET).remove([path]);say("Media record failed: "+row.error.message);return;}
-    selectedMedia=row.data;var signed=await client.storage.from(BUCKET).createSignedUrl(path,3600);if(signed.error){say("Upload saved, but preview URL failed: "+signed.error.message);return;}
-    if(type==="video"&&selected.tagName!=="VIDEO"){var video=document.createElement("video");video.controls=true;video.preload="metadata";if(selected.hasAttribute("data-ve-new-content"))video.setAttribute("data-ve-new-content","true");selected.replaceWith(video);selected=video;selected.className="";keyFor(selected,rootFor(selected));}
-    apply(selected,type,signed.data.signedUrl);say("Media uploaded as a draft and previewed. Save this element as a draft; publish will publish both.");
+    var signed=await client.storage.from(BUCKET).createSignedUrl(path,3600);if(signed.error){say("Upload saved, but preview URL failed: "+signed.error.message);return;}
+    var tag=type==="video"?"video":type==="audio"?"audio":type==="document"?"a":"img";
+    if(selected.tagName.toLowerCase()!==tag){var replacement=document.createElement(tag);if(selected.hasAttribute("data-ve-new-content"))replacement.setAttribute("data-ve-new-content","true");replacement.className=selected.className||"";replacement.style.cssText=selected.style.cssText||"";selected.replaceWith(replacement);selected=replacement;}
+    if(type==="video"||type==="audio"){selected.controls=true;selected.preload="metadata";selected.style.maxWidth="100%";}
+    if(type==="image"){selected.alt=mediaAlt||mediaTitle;selected.style.maxWidth="100%";selected.style.height="auto";}
+    if(type==="document"){selected.textContent=mediaTitle;selected.target="_blank";selected.rel="noopener noreferrer";}
+    selected.setAttribute("data-ve-media-type",type);apply(selected,type==="document"?"link":type,signed.data.signedUrl);
+    keyFor(selected,rootFor(selected));selectedMedia=row.data;toolbar.querySelector("#veMediaFields").style.display="none";
+    say("Media uploaded and previewed as a draft. Save this element as a draft or publish when ready.");
   }
   async function save(status){
     if(!selected||!selectedSection)return;selected.contentEditable="false";var root=rootFor(selected),key=keyFor(selected,root),kind=kindOf(selected);
@@ -158,7 +176,11 @@
     var q=await pub.from("cms_content").select("slug,payload,updated_at").eq("status","published").order("updated_at",{ascending:false});if(q.error)return;
     var done=new Set();for(var row of(q.data||[])){if(done.has(row.slug))continue;done.add(row.slug);var p=row.payload||{};if(!p.visual_editor||!p.element_key)continue;
       var el=document.querySelector('[data-ve-key="'+CSS.escape(p.element_key)+'"]');if(!el){var rid=String(p.element_key).split("__")[0],root=document.getElementById(rid);if(!root)continue;var nodes=root.querySelectorAll("h1,h2,h3,h4,p,a,button,img,video,source,li,span");nodes.forEach(function(n){if(keyFor(n,root)===p.element_key)el=n;});if(!el&&p.is_new_content){el=document.createElement(p.element_tag||"p");el.setAttribute("data-ve-key",p.element_key);el.setAttribute("data-ve-new-content","true");root.appendChild(el);}}
-      if(p.media_id){var media=await pub.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).eq("status","published").maybeSingle();if(media.data){var signed=await pub.storage.from(BUCKET).createSignedUrl(media.data.storage_path,3600);if(!signed.error)apply(el,media.data.media_type==="video"?"video":"image",signed.data.signedUrl);continue;}}
+      if(p.media_id){var media=await pub.from("cms_media").select("storage_path,media_type,title,alt_text").eq("id",p.media_id).eq("status","published").maybeSingle();if(media.data){var signed=await pub.storage.from(BUCKET).createSignedUrl(media.data.storage_path,3600);if(!signed.error){
+      var type=media.data.media_type,tag=type==="video"?"video":type==="audio"?"audio":type==="document"?"a":"img";
+      if(el&&el.tagName.toLowerCase()!==tag){var replacement=document.createElement(tag);if(el.hasAttribute("data-ve-new-content"))replacement.setAttribute("data-ve-new-content","true");replacement.className=el.className||"";replacement.style.cssText=el.style.cssText||"";el.replaceWith(replacement);el=replacement;}
+      if(el){if(type==="video"||type==="audio"){el.controls=true;el.preload="metadata";}if(type==="image")el.alt=media.data.alt_text||media.data.title||"";if(type==="document"){el.textContent=media.data.title||"Open file";el.target="_blank";el.rel="noopener noreferrer";}apply(el,type==="document"?"link":type,signed.data.signedUrl);}
+    }continue;}}
       apply(el,p.element_kind,p.element_value);
     }
   }
