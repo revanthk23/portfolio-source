@@ -79,6 +79,137 @@
   }
 
 
+
+  // Legacy portfolio_content is still the editor for the original main sections.
+  // Render only published records; never expose draft content.
+  async function loadPublishedLegacySections() {
+    if (!window.supabase || !window.supabase.createClient) return;
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    try {
+      const result = await client.from("portfolio_content")
+        .select("section_key,title,content,sort_order,created_at")
+        .eq("status", "published")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (result.error) throw result.error;
+
+      const groups = new Map();
+      (result.data || []).forEach(function (record) {
+        const key = record.section_key || "";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(record);
+      });
+
+      groups.forEach(function (records, key) {
+        if (key === "about") {
+          renderPublishedAbout(records);
+          return;
+        }
+        const targetId = key.indexOf("topic__") === 0 ? key.slice(7) : key;
+        const target = document.getElementById(targetId);
+        if (!target || !records.length) return;
+        let mount = target.querySelector(":scope > .legacy-published-content");
+        if (!mount) {
+          mount = document.createElement("div");
+          mount.className = "legacy-published-content wrap";
+          mount.setAttribute("aria-label", "Published portfolio content");
+          target.appendChild(mount);
+        }
+
+        records.forEach(async function (record) {
+          const content = record.content && typeof record.content === "object" ? record.content : {};
+          const card = document.createElement("article");
+          card.className = "block glow-tab";
+          const heading = document.createElement("h3");
+          heading.textContent = record.title || "Portfolio entry";
+          card.appendChild(heading);
+
+          const subtitle = content.subtitle || content.role || content.category || "";
+          if (subtitle) {
+            const sub = document.createElement("p");
+            sub.className = "muted";
+            sub.textContent = String(subtitle);
+            card.appendChild(sub);
+          }
+          const description = content.description || content.summary || content.text || "";
+          if (description) {
+            const paragraph = document.createElement("p");
+            paragraph.className = "muted";
+            paragraph.textContent = String(description);
+            card.appendChild(paragraph);
+          }
+          if (Array.isArray(content.paragraphs)) {
+            content.paragraphs.forEach(function (value) {
+              const paragraph = document.createElement("p");
+              paragraph.className = "muted";
+              paragraph.textContent = String(value);
+              card.appendChild(paragraph);
+            });
+          }
+
+          const mediaWrap = document.createElement("div");
+          mediaWrap.className = "cms-published-media";
+          const imageUrl = content.image || content.imageUrl || content.image_url || "";
+          if (typeof imageUrl === "string" && /^https?:\/\//i.test(imageUrl)) {
+            const image = document.createElement("img");
+            image.src = imageUrl;
+            image.alt = content.imageAlt || content.image_alt || record.title || "";
+            image.loading = "lazy";
+            image.style.maxWidth = "100%";
+            image.style.height = "auto";
+            mediaWrap.appendChild(image);
+          }
+
+          // Existing legacy uploads use the private portfolio-media bucket.
+          // A signed URL is shown only if the bucket's current read policy permits it.
+          if (Array.isArray(content.media_files)) {
+            for (const file of content.media_files) {
+              if (!file || typeof file.path !== "string" || file.path.indexOf("..") !== -1 ||
+                  file.path.startsWith("/")) continue;
+              const signed = await client.storage.from("portfolio-media").createSignedUrl(file.path, 3600);
+              if (signed.error || !signed.data) continue;
+              if (file.type === "video" || /^video\//i.test(file.mime_type || "")) {
+                const video = document.createElement("video");
+                video.src = signed.data.signedUrl;
+                video.controls = true;
+                video.preload = "metadata";
+                video.style.maxWidth = "100%";
+                mediaWrap.appendChild(video);
+              } else {
+                const image = document.createElement("img");
+                image.src = signed.data.signedUrl;
+                image.alt = file.name || record.title || "";
+                image.loading = "lazy";
+                image.style.maxWidth = "100%";
+                image.style.height = "auto";
+                mediaWrap.appendChild(image);
+              }
+            }
+          }
+          if (mediaWrap.childNodes.length) card.appendChild(mediaWrap);
+
+          const known = new Set(["subtitle","role","category","description","summary","text",
+            "paragraphs","image","imageUrl","image_url","imageAlt","image_alt","media_files"]);
+          Object.keys(content).forEach(function (keyName) {
+            if (known.has(keyName) || content[keyName] == null || content[keyName] === "") return;
+            const extra = document.createElement("p");
+            extra.className = "muted";
+            const label = keyName.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ");
+            const value = Array.isArray(content[keyName]) ? content[keyName].join(" · ") :
+              (typeof content[keyName] === "object" ? JSON.stringify(content[keyName]) : String(content[keyName]));
+            extra.textContent = label + ": " + value;
+            card.appendChild(extra);
+          });
+          mount.appendChild(card);
+        });
+      });
+    } catch (error) {
+      console.warn("Published portfolio content could not be loaded; the original website content remains visible.", error);
+    }
+  }
+
   // Render only explicitly published multi-site CMS entries. Drafts remain private.
   async function loadPublishedCmsSections() {
     if (!window.supabase || !window.supabase.createClient) return;
@@ -228,10 +359,10 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", loadPublishedAbout);
+    document.addEventListener("DOMContentLoaded", loadPublishedLegacySections);
     document.addEventListener("DOMContentLoaded", loadPublishedCmsSections);
   } else {
-    loadPublishedAbout();
+    loadPublishedLegacySections();
     loadPublishedCmsSections();
   }
 })();
