@@ -76,7 +76,7 @@
   function applyEdit(){if(!selected)return;var k=kindOf(selected);if(k==="text"){selected.contentEditable="false";}else if(k==="link")apply(selected,k,toolbar.querySelector("#veUrl").value.trim());else return;say("Changes previewed on the page. Save as draft or publish.");}
   function cancelEdit(){if(!selected)return;selected.contentEditable="false";toolbar.querySelector("#veEditBox").style.display="none";toolbar.querySelector("#veText").value=valueOf(selected);say("Edit controls closed. Current page is your preview.");}
   async function addContent(){
-    if(!selected||!selectedSection)return;var root=rootFor(selected),node=document.createElement("p");node.textContent="New content — click Edit to change this text.";node.className=selected.className||"";selected.insertAdjacentElement("afterend",node);selected=node;await select(node);editSelected();say("New paragraph added to this section. Edit it, then save as draft.");
+    if(!selected||!selectedSection)return;var root=rootFor(selected),node=document.createElement("p");node.textContent="New content — click Edit to change this text.";node.setAttribute("data-ve-new-content","true");root.appendChild(node);selected=node;await select(node);editSelected();say("New paragraph added at the end of this section. Edit it, then save as draft.");
   }
   async function uploadMedia(file){
     if(!selected||!selectedSection)return;var type=file.type.indexOf("video/")===0?"video":"image";if(type==="image"&&!file.type.startsWith("image/")){say("Choose an image or video file.");return;}
@@ -89,7 +89,7 @@
   }
   async function save(status){
     if(!selected||!selectedSection)return;selected.contentEditable="false";var root=rootFor(selected),key=keyFor(selected,root),kind=kindOf(selected);
-    var payload={visual_editor:true,element_key:key,element_kind:kind,element_value:valueOf(selected)};
+    var payload={visual_editor:true,element_key:key,element_kind:kind,element_value:valueOf(selected),is_new_content:selected.hasAttribute("data-ve-new-content"),element_tag:selected.tagName.toLowerCase()};
     if(selectedMedia)payload.media_id=selectedMedia.id;
     var data={site_id:siteId,page_id:pageId,section_id:selectedSection.id,title:"Visual edit: "+key,slug:"visual:"+key,payload:payload,status:status,sort_order:0,published_at:status==="published"?new Date().toISOString():null};
     var result=selectedRecord&&selectedRecord.id?await client.from("cms_content").update(data).eq("id",selectedRecord.id).select("id,status,payload").single():await client.from("cms_content").insert(data).select("id,status,payload").single();
@@ -110,7 +110,7 @@
     var pub=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
     var q=await pub.from("cms_content").select("slug,payload,updated_at").eq("status","published").order("updated_at",{ascending:false});if(q.error)return;
     var done=new Set();for(var row of(q.data||[])){if(done.has(row.slug))continue;done.add(row.slug);var p=row.payload||{};if(!p.visual_editor||!p.element_key)continue;
-      var el=document.querySelector('[data-ve-key="'+CSS.escape(p.element_key)+'"]');if(!el){var rid=String(p.element_key).split("__")[0],root=document.getElementById(rid);if(!root)continue;var nodes=root.querySelectorAll("h1,h2,h3,h4,p,a,button,img,video,source,li,span");nodes.forEach(function(n){if(keyFor(n,root)===p.element_key)el=n;});}
+      var el=document.querySelector('[data-ve-key="'+CSS.escape(p.element_key)+'"]');if(!el){var rid=String(p.element_key).split("__")[0],root=document.getElementById(rid);if(!root)continue;var nodes=root.querySelectorAll("h1,h2,h3,h4,p,a,button,img,video,source,li,span");nodes.forEach(function(n){if(keyFor(n,root)===p.element_key)el=n;});if(!el&&p.is_new_content){el=document.createElement(p.element_tag||"p");el.setAttribute("data-ve-key",p.element_key);el.setAttribute("data-ve-new-content","true");root.appendChild(el);}}
       if(p.media_id){var media=await pub.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).eq("status","published").maybeSingle();if(media.data){var signed=await pub.storage.from(BUCKET).createSignedUrl(media.data.storage_path,3600);if(!signed.error)apply(el,media.data.media_type==="video"?"video":"image",signed.data.signedUrl);continue;}}
       apply(el,p.element_kind,p.element_value);
     }
