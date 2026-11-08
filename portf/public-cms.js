@@ -312,9 +312,8 @@
         if (section.parent_section_id) {
           const parentRow = sectionById.get(section.parent_section_id);
           if (!parentRow) return null;
-          const parentTargetId = parentRow.section_key.indexOf("topic__") === 0
-            ? parentRow.section_key.slice(7) : parentRow.section_key;
-          const parent = document.getElementById(parentTargetId);
+          // Resolve the full ancestor chain so depth-3+ subsections are rendered too.
+          const parent = ensureTarget(parentRow);
           if (!parent) return null;
           target = document.createElement("article");
           target.id = targetId;
@@ -354,8 +353,16 @@
         link.textContent = (section.parent_section_id ? "↳ " : "") + (section.title || "Section");
         nav.appendChild(link);
       }
+      function sectionDepth(section) {
+        let depth = 0, cursor = section;
+        while (cursor && cursor.parent_section_id && depth < 50) {
+          cursor = sectionById.get(cursor.parent_section_id);
+          depth++;
+        }
+        return depth;
+      }
       sections.slice().sort(function (a, b) {
-        return Number(!!a.parent_section_id) - Number(!!b.parent_section_id) ||
+        return sectionDepth(a) - sectionDepth(b) ||
           Number(a.sort_order || 0) - Number(b.sort_order || 0);
       }).forEach(function (section) {
         const target = ensureTarget(section);
