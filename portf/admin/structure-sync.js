@@ -54,6 +54,7 @@
     // Cloudflare/Netlify projects may be deployed with either the portfolio
     // folder as the site root or the repository root. Try both valid layouts.
     const candidates = [
+      "https://revanthportf.netlify.app/?cms-structure=1",
       new URL("../index.html", window.location.href).href,
       new URL("/index.html", window.location.origin).href,
       new URL("/portf/index.html", window.location.origin).href
