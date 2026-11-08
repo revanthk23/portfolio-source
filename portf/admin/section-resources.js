@@ -196,7 +196,7 @@
         esc(row.status || "draft") + '</span></div>' +
         '<button class="secondary-button" type="button" data-toggle-media-publish="' + esc(row.id) + '">' +
         (row.status === "published" ? "Unpublish" : "Publish") + '</button>' +
-        '<button class="secondary-button" type="button" data-resource-preview="' + esc(row.id) + '">Preview</button>'
+        '<button class="secondary-button" type="button" data-resource-preview="' + esc(row.id) + '">Preview</button>' +
         '<button class="secondary-button" type="button" data-resource-open="' + esc(row.id) + '">Open</button>' +
         '<button class="secondary-button" type="button" data-resource-download="' + esc(row.id) + '">Download</button>' +
         '<button class="secondary-button" type="button" data-rename-file="' + esc(row.id) + '">Rename</button>' +
