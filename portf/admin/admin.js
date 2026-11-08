@@ -11,46 +11,49 @@ let discoveredSubsections = [];
 window.__portfolioSetSiteSections = function (mainSections, subsections) {
   discoveredMainSections = Array.isArray(mainSections) ? mainSections : [];
   discoveredSubsections = Array.isArray(subsections) ? subsections : [];
-  discoveredMainSections.forEach(function (item) {
-    if (item && item.key && item.title) SECTION_TITLES[item.key] = item.title;
-  });
-  discoveredSubsections.forEach(function (item) {
+  Object.keys(SECTION_TITLES).forEach(function (key) { delete SECTION_TITLES[key]; });
+  discoveredMainSections.concat(discoveredSubsections).forEach(function (item) {
     if (item && item.key && item.title) SECTION_TITLES[item.key] = item.title;
   });
 
   const nav = document.getElementById("sectionNav");
   if (!nav) return;
-  const button = function (key, title, nested) {
-    return '<button class="nav-item' + (nested ? ' nav-subitem' : '') +
-      '" data-section="' + escapeHtml(key) + '">' + escapeHtml(title) + '</button>';
+  const button = function (key, title, depth) {
+    return '<button class="nav-item' + (depth ? ' nav-subitem nav-depth-' + Math.min(depth, 5) : '') +
+      '" data-section="' + escapeHtml(key) + '">' + (depth ? '↳ ' : '') + escapeHtml(title) + '</button>';
   };
+  const children = new Map();
+  discoveredSubsections.forEach(function (item) {
+    const parent = item && item.parentKey ? item.parentKey : "";
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(item);
+  });
   const seen = new Set();
-  let html = button("overview", "Overview", false) +
+  let html = button("overview", "Overview", 0) +
+    button("section-manager", "Section Manager", 0) +
     '<div class="nav-group-label">MAIN WEBSITE</div>';
+  function appendChildren(parentKey, depth) {
+    (children.get(parentKey) || []).forEach(function (item) {
+      if (!item || !item.key || seen.has(item.key)) return;
+      seen.add(item.key);
+      html += button(item.key, item.title || item.key, depth);
+      appendChildren(item.key, depth + 1);
+    });
+  }
   discoveredMainSections.forEach(function (main) {
     if (!main || !main.key || seen.has(main.key)) return;
     seen.add(main.key);
-    html += button(main.key, main.title, false);
-    const children = discoveredSubsections.filter(function (sub) {
-      return sub && sub.parentKey === main.key && !seen.has(sub.key);
-    });
-    children.forEach(function (sub) {
-      seen.add(sub.key);
-      html += button(sub.key, "↳ " + sub.title, true);
-    });
+    html += button(main.key, main.title || main.key, 0);
+    appendChildren(main.key, 1);
   });
-  const ungrouped = discoveredSubsections.filter(function (sub) {
-    return sub && sub.key && !seen.has(sub.key);
+  discoveredSubsections.forEach(function (item) {
+    if (!item || !item.key || seen.has(item.key)) return;
+    seen.add(item.key);
+    html += button(item.key, item.title || item.key, 1);
+    appendChildren(item.key, 2);
   });
-  if (ungrouped.length) {
-    html += '<div class="nav-group-label">OTHER SUBSECTIONS</div>';
-    ungrouped.forEach(function (sub) {
-      seen.add(sub.key);
-      html += button(sub.key, sub.title, true);
-    });
-  }
   html += '<div class="nav-group-label">MEDIA LIBRARY</div>' +
-    button("images", "Image Library", false) + button("videos", "Video Library", false);
+    button("images", "Image Library", 0) + button("videos", "Video Library", 0);
   nav.innerHTML = html;
 };
 
@@ -104,40 +107,44 @@ async function verifyAdministrator() {
     showLogin("This account is not authorized to access the portfolio dashboard.");
     return false;
   }
-  // Optional bootstrap: the RPC exists only after the additive multi-site migration is applied.
-  // Its failure must not block the already-working legacy portfolio dashboard.
-  const siteBootstrap = await supabaseClient.rpc("cms_bootstrap_portfolio_site");
-  if (!siteBootstrap.error && siteBootstrap.data) {
-    window.portfolioCmsSiteId = siteBootstrap.data;
-  } else if (siteBootstrap.error) {
-    console.info("Multi-site CMS bootstrap is not available yet; continuing with the legacy portfolio CMS.");
-  }
+
   showApp(user.email);
-  let structureDiscovered = false;
-  if (typeof window.syncPortfolioStructure === "function") {
-    try {
-      const discovered = await window.syncPortfolioStructure();
-      structureDiscovered = !!(discovered && discovered.mainSections && discovered.mainSections.length);
-    } catch (structureError) {
-      console.warn("Website structure discovery failed; trying the saved CMS structure.", structureError);
-    }
+  contentPanel.innerHTML = '<div class="loading-state">Connecting the portfolio content management system…</div>';
+  document.getElementById("pageTitle").textContent = "Portfolio workspace";
+  const siteBootstrap = await supabaseClient.rpc("cms_bootstrap_portfolio_site");
+  if (siteBootstrap.error || !siteBootstrap.data) {
+    const reason = siteBootstrap.error && siteBootstrap.error.message
+      ? siteBootstrap.error.message : "The CMS site could not be initialized.";
+    contentPanel.innerHTML =
+      '<div class="notice error"><strong>Portfolio CMS connection needs attention</strong>' +
+      '<p>The dashboard could not connect to the approved main-website CMS. The older fallback editor is intentionally disabled so it does not look like the completed dashboard or save content into the wrong system.</p>' +
+      '<p><strong>Connection detail:</strong> ' + escapeHtml(reason) + '</p>' +
+      '<p>Existing website content has not been changed. Check that the portfolio CMS migrations and administrator membership are present in the connected Supabase project, then refresh this page.</p>' +
+      '<button class="secondary-button" id="retryCmsConnection" type="button">Retry connection</button></div>';
+    return false;
   }
-  if (window.portfolioCmsSiteId) {
-    try {
-      await syncCmsStructure();
-    } catch (cmsSyncError) {
-      console.warn("CMS structure sync could not complete.", cmsSyncError);
+  window.portfolioCmsSiteId = siteBootstrap.data;
+  try {
+    if (typeof window.syncPortfolioStructure !== "function") {
+      throw new Error("The website structure discovery module did not load.");
     }
-    // Always merge the saved CMS hierarchy after discovery. This keeps CMS-created
-    // sections visible and preserves administrator-managed titles and ordering.
-    try {
-      await restoreNavigationFromCms();
-    } catch (restoreError) {
-      console.error("Could not restore section navigation from saved CMS records.", restoreError);
+    const discovered = await window.syncPortfolioStructure();
+    if (!discovered || !discovered.mainSections || !discovered.mainSections.length) {
+      throw new Error("No main website sections were discovered. Check the public portfolio page structure.");
     }
+    await syncCmsStructure();
+    await restoreNavigationFromCms();
+    await renderSection("overview");
+    return true;
+  } catch (error) {
+    console.error("Portfolio CMS initialization failed.", error);
+    contentPanel.innerHTML =
+      '<div class="notice error"><strong>Could not prepare the main-website dashboard</strong><p>' +
+      escapeHtml(error.message || "Unknown initialization error") +
+      '</p><p>Your existing website content remains untouched. Retry after checking the CMS connection.</p>' +
+      '<button class="secondary-button" id="retryCmsConnection" type="button">Retry initialization</button></div>';
+    return false;
   }
-  await renderSection("overview");
-  return true;
 }
 function setActiveNavigation(section) {
   document.querySelectorAll(".nav-item").forEach(function (button) {
@@ -263,30 +270,66 @@ async function restoreNavigationFromCms() {
     subsections: subsections.length
   };
 }
-function renderOverview() {
-  contentPanel.innerHTML = '<div class="loading-state">Loading dashboard statistics…</div>';
-  return supabaseClient.from("portfolio_content").select("id,status,section_key")
-    .then(function (result) {
-      if (result.error) throw result.error;
-      const rows = result.data || [];
-      const published = rows.filter(function (row) { return row.status === "published"; }).length;
-      const drafts = rows.filter(function (row) { return row.status === "draft"; }).length;
-      contentPanel.innerHTML =
-        '<div class="welcome-card"><div class="welcome-icon">✦</div><div><h2>Your portfolio workspace</h2><p>Manage every main section and subsection from one editor. Existing portfolio entries remain editable, and new CMS entries appear on the public website only when published.</p></div></div>' +
-        '<div class="stat-grid">' +
-        '<article class="stat-card"><span>TOTAL CONTENT</span><strong>' + rows.length + '</strong><p>Records stored in Supabase</p></article>' +
-        '<article class="stat-card"><span>PUBLISHED</span><strong>' + published + '</strong><p>Marked as published in the database</p></article>' +
-        '<article class="stat-card"><span>DRAFTS</span><strong>' + drafts + '</strong><p>Saved but not published</p></article></div>' +
-        '<div class="notice"><strong>Publishing status</strong><p>Published entries and resources are rendered by the public portfolio. Drafts remain private. Changes are being tested in this development environment; production is not changed.</p></div>' +
-        '<div class="quick-links"><h3>Manage a section</h3><div class="quick-grid">' +
-        Object.keys(SECTION_TITLES).map(function (key) {
-          return '<button class="quick-link" data-go-section="' + key + '">' + escapeHtml(SECTION_TITLES[key]) + ' <span>→</span></button>';
-        }).join("") + '</div></div>';
-    })
-    .catch(function (error) {
-      contentPanel.innerHTML = '<div class="notice error"><strong>Could not load dashboard statistics</strong><p>' +
-        escapeHtml(error.message || "Please check your Supabase permissions.") + '</p><button class="secondary-button" id="retryOverview">Try again</button></div>';
-    });
+async function renderOverview() {
+  contentPanel.innerHTML = '<div class="loading-state">Loading your portfolio workspace…</div>';
+  const siteId = window.portfolioCmsSiteId;
+  if (!siteId) {
+    contentPanel.innerHTML = '<div class="notice error"><strong>CMS connection unavailable</strong><p>Reconnect the portfolio CMS to manage the main website.</p></div>';
+    return;
+  }
+  try {
+    const results = await Promise.all([
+      supabaseClient.from("cms_sections").select("id,section_key,title,parent_section_id,status,sort_order")
+        .eq("site_id", siteId).order("sort_order", { ascending: true }),
+      supabaseClient.from("cms_content").select("id,status").eq("site_id", siteId),
+      supabaseClient.from("cms_media").select("id,status,media_type").eq("site_id", siteId),
+      supabaseClient.from("portfolio_content").select("id,status")
+    ]);
+    for (const result of results) if (result.error) throw result.error;
+    const sections = results[0].data || [];
+    const cmsEntries = results[1].data || [];
+    const media = results[2].data || [];
+    const legacy = results[3].data || [];
+    const published = cmsEntries.filter(row => row.status === "published").length +
+      legacy.filter(row => row.status === "published").length;
+    const drafts = cmsEntries.filter(row => row.status === "draft").length +
+      legacy.filter(row => row.status === "draft").length;
+    const mainSections = sections.filter(row => !row.parent_section_id);
+    const childCount = sections.length - mainSections.length;
+    const cards = mainSections.map(function (section) {
+      const descendants = sections.filter(function (row) {
+        let parent = row.parent_section_id;
+        while (parent) {
+          if (parent === section.id) return true;
+          const match = sections.find(item => item.id === parent);
+          parent = match ? match.parent_section_id : null;
+        }
+        return false;
+      });
+      return '<button class="dashboard-section-card" type="button" data-go-section="' + escapeHtml(section.section_key) + '">' +
+        '<span class="dashboard-section-kicker">MAIN WEBSITE SECTION</span><strong>' + escapeHtml(section.title) +
+        '</strong><span>' + descendants.length + ' subsection(s) · ' + escapeHtml(section.status) +
+        '</span><span class="dashboard-card-action">Manage section →</span></button>';
+    }).join("");
+    contentPanel.innerHTML =
+      '<section class="dashboard-welcome"><div><div class="eyebrow">MAIN WEBSITE CONTENT MANAGEMENT</div>' +
+      '<h2>Welcome to your portfolio workspace</h2><p>Manage the actual sections and subsections of your public portfolio. Edit content, organize media and documents, and publish updates without changing the existing website layout.</p>' +
+      '<div class="dashboard-actions"><button class="primary-button" type="button" data-go-section="section-manager">Manage website structure</button>' +
+      '<a class="secondary-button" href="../" target="_blank" rel="noopener">Preview public website ↗</a></div></div>' +
+      '<div class="dashboard-welcome-mark">P</div></section>' +
+      '<div class="dashboard-stat-grid">' +
+      '<article class="dashboard-stat"><span>MAIN SECTIONS</span><strong>' + mainSections.length + '</strong><small>' + childCount + ' nested subsections</small></article>' +
+      '<article class="dashboard-stat"><span>CONTENT ENTRIES</span><strong>' + (cmsEntries.length + legacy.length) + '</strong><small>' + published + ' published · ' + drafts + ' drafts</small></article>' +
+      '<article class="dashboard-stat"><span>MEDIA & RESOURCES</span><strong>' + media.length + '</strong><small>Images, videos, documents, audio and files</small></article>' +
+      '</div><div class="dashboard-section-heading"><div><h2>Website sections</h2><p>Select a section to edit its content and manage its resources.</p></div>' +
+      '<button class="secondary-button" type="button" data-go-section="section-manager">Edit section structure</button></div>' +
+      '<div class="dashboard-section-grid">' + (cards || '<p class="empty-state">No website sections were found. Use Section Manager to create the first section.</p>') + '</div>' +
+      '<p class="dashboard-footnote">Drafts remain private. Publishing makes eligible content and resources available to the public portfolio. Your existing hand-built website sections remain in place.</p>';
+  } catch (error) {
+    contentPanel.innerHTML = '<div class="notice error"><strong>Dashboard overview could not load</strong><p>' +
+      escapeHtml(error.message || "Please check your CMS permissions.") +
+      '</p><button class="secondary-button" id="retryOverview" type="button">Try again</button></div>';
+  }
 }
 async function loadContentSection(section) {
   contentPanel.innerHTML = '<div class="loading-state">Loading ' + escapeHtml(SECTION_TITLES[section]) + '…</div>';
@@ -580,6 +623,12 @@ async function mountSectionResources(section) {
 async function renderSection(section) {
   currentSection = section;
   setActiveNavigation(section);
+  if (section === "section-manager") {
+    document.getElementById("pageTitle").textContent = "Section Manager";
+    if (window.portfolioSectionManager) return window.portfolioSectionManager.render();
+    contentPanel.innerHTML = '<div class="notice error"><strong>Section Manager is unavailable</strong><p>Refresh the dashboard and try again.</p></div>';
+    return;
+  }
   const title = section === "overview" ? "Overview" :
     section === "images" ? "Image Library" : section === "videos" ? "Video Library" : SECTION_TITLES[section];
   document.getElementById("pageTitle").textContent = title || "Overview";
@@ -588,22 +637,20 @@ async function renderSection(section) {
     if (section === "images" || section === "videos") {
       await loadMedia(section);
     } else if (SECTION_TITLES[section]) {
-      if (window.cmsSectionEditor && window.cmsSectionEditor.supports(section)) {
-        await window.cmsSectionEditor.load(section);
-      } else {
-        await loadContentSection(section);
+      if (!window.portfolioCmsSiteId || !window.cmsSectionEditor ||
+          !window.cmsSectionEditor.supports(section)) {
+        throw new Error("The main-website CMS editor is not connected. Reconnect the CMS and refresh the dashboard.");
       }
-      // Mount the same independent resource manager after every main-section
-      // and subsection editor has rendered, regardless of which editor handled it.
+      await window.cmsSectionEditor.load(section);
       await mountSectionResources(section);
     }
   } catch (error) {
-    contentPanel.innerHTML = '<div class="notice error"><strong>Could not load this section</strong><p>' +
-      escapeHtml(error.message || "Unknown error") + '</p><button class="secondary-button" id="retrySection">Try again</button></div>';
-    // Keep section resources available even if the content editor has a separate error.
+    contentPanel.innerHTML = '<div class="notice error"><strong>Could not load this website section</strong><p>' +
+      escapeHtml(error.message || "Unknown error") + '</p><button class="secondary-button" id="retrySection" type="button">Try again</button></div>';
     if (SECTION_TITLES[section]) await mountSectionResources(section);
   }
 }
+window.portfolioAdminOpenSection = renderSection;
 document.getElementById("sectionNav").addEventListener("click", function (event) {
   const button = event.target.closest("button[data-section]");
   if (button) renderSection(button.dataset.section);
@@ -629,6 +676,7 @@ contentPanel.addEventListener("click", function (event) {
   if (event.target.id === "previewRecordButton") return previewRecord();
   if (event.target.id === "confirmPublishButton") return saveRecord(null, "published");
   if (event.target.id === "retryOverview") return renderOverview();
+  if (event.target.id === "retryCmsConnection") return verifyAdministrator();
   if (event.target.id === "retrySection") return renderSection(currentSection);
 });
 contentPanel.addEventListener("input", function (event) {

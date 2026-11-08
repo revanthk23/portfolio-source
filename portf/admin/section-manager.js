@@ -27,12 +27,6 @@
   if (nav) {
     new MutationObserver(ensureNavButton).observe(nav, { childList: true, subtree: true });
     ensureNavButton();
-    nav.addEventListener("click", event => {
-      const button = event.target.closest('[data-section="section-manager"]');
-      if (!button) return;
-      event.preventDefault();
-      render().catch(showError);
-    });
   }
 
   async function loadRows() {
@@ -73,7 +67,7 @@
         '<div class="form-row"><label>Status<select id="cmsSectionStatus"><option value="draft">Draft</option><option value="published">Published</option><option value="hidden">Hidden</option></select></label>' +
         '<label>Display order<input id="cmsSectionOrder" type="number" value="0"></label></div>' +
         '<div class="form-actions"><button class="primary-button" type="submit">Save section</button><button class="secondary-button" id="cancelCmsSection" type="button">Cancel</button></div></form>' +
-        '<div class="notice"><strong>How publishing works</strong><p>Draft and hidden sections stay off the public site. Published sections are eligible to appear publicly once the public renderer is connected. Existing website sections remain discoverable automatically.</p></div>';
+        '<div class="notice"><strong>Connected to your public portfolio</strong><p>Published sections and their published content/resources are eligible to appear on the live website. Draft and hidden sections remain private. Existing hand-built website sections are discovered automatically and are not removed or redesigned by this manager.</p></div>';
       document.getElementById("pageTitle").textContent = "Section Manager";
       document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === "section-manager"));
     });
@@ -111,6 +105,10 @@
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   panel.addEventListener("click", async event => {
+    const openSection = event.target.closest("[data-open-section]");
+    if (openSection && typeof window.portfolioAdminOpenSection === "function") {
+      return window.portfolioAdminOpenSection(openSection.dataset.openSection);
+    }
     if (event.target.id === "newCmsSection") return openForm(null);
     if (event.target.id === "cancelCmsSection") { editing = null; document.getElementById("cmsSectionForm").hidden = true; return; }
     if (event.target.id === "retryCmsSections") return render().catch(showError);
