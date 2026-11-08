@@ -102,14 +102,14 @@
         groups.get(key).push(record);
       });
 
-      groups.forEach(function (records, key) {
+      for (const [key, records] of groups) {
         if (key === "about") {
           renderPublishedAbout(records);
-          return;
+          continue;
         }
         const targetId = key.indexOf("topic__") === 0 ? key.slice(7) : key;
         const target = document.getElementById(targetId);
-        if (!target || !records.length) return;
+        if (!target || !records.length) continue;
         let mount = target.querySelector(":scope > .legacy-published-content");
         if (!mount) {
           mount = document.createElement("div");
@@ -118,7 +118,7 @@
           target.appendChild(mount);
         }
 
-        records.forEach(async function (record) {
+        for (const record of records) {
           const content = record.content && typeof record.content === "object" ? record.content : {};
           const card = document.createElement("article");
           card.className = "block glow-tab";
@@ -203,8 +203,8 @@
             card.appendChild(extra);
           });
           mount.appendChild(card);
-        });
-      });
+        }
+      }
     } catch (error) {
       console.warn("Published portfolio content could not be loaded; the original website content remains visible.", error);
     }
