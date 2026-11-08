@@ -128,14 +128,12 @@ async function verifyAdministrator() {
     } catch (cmsSyncError) {
       console.warn("CMS structure sync could not complete.", cmsSyncError);
     }
-    // If reading the public HTML fails, rebuild the navigation from the
-    // already-saved CMS hierarchy instead of leaving the admin with no sections.
-    if (!structureDiscovered) {
-      try {
-        await restoreNavigationFromCms();
-      } catch (restoreError) {
-        console.error("Could not restore section navigation from saved CMS records.", restoreError);
-      }
+    // Always merge the saved CMS hierarchy after discovery. This keeps CMS-created
+    // sections visible and preserves administrator-managed titles and ordering.
+    try {
+      await restoreNavigationFromCms();
+    } catch (restoreError) {
+      console.error("Could not restore section navigation from saved CMS records.", restoreError);
     }
   }
   await renderSection("overview");
@@ -187,9 +185,9 @@ async function syncCmsStructure() {
     if (!item || !item.key || !item.title) return;
     const existing = existingByKey.get(item.key);
     if (existing) {
+      // Discovery may refresh the parent relationship, but must not overwrite
+      // titles, visibility, or manual ordering set in the Section Manager.
       const updated = await supabaseClient.from("cms_sections").update({
-        title: item.title,
-        sort_order: order,
         parent_section_id: parentSectionId || null
       }).eq("id", existing.id);
       if (updated.error) throw updated.error;
@@ -227,6 +225,8 @@ async function syncCmsStructure() {
     subsections: discoveredSubsections.length
   };
 }
+window.portfolioRefreshCmsNavigation = restoreNavigationFromCms;
+
 async function restoreNavigationFromCms() {
   if (!window.portfolioCmsSiteId || !supabaseClient) return;
   const page = await supabaseClient.from("cms_pages")
