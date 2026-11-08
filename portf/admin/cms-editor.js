@@ -78,8 +78,12 @@
         ? '<video controls preload="metadata" src="' + esc(item.url) + '"></video>'
         : '<img loading="lazy" src="' + esc(item.url) + '" alt="' + esc(row.alt_text || row.title) + '">')
         : '<div class="media-unavailable">Preview unavailable</div>';
-      return '<div class="cms-media-item">' + preview + '<label><input type="checkbox" data-cms-media="' +
-        esc(row.id) + '"' + checked + '> ' + esc(row.title) + '</label></div>';
+      return '<div class="cms-media-item">' + preview +
+        '<div class="cms-media-actions"><button class="secondary-button" type="button" data-preview-media="' +
+        esc(row.title || "Uploaded media") + '" data-preview-url="' + esc(item.url) +
+        '" data-preview-type="' + (row.media_type === "video" ? "video" : "image") +
+        '">Preview</button><label><input type="checkbox" data-cms-media="' +
+        esc(row.id) + '"' + checked + '> Attach to entry</label></div></div>';
     }).join("");
     panel.innerHTML =
       '<div class="section-heading"><div><h2>' + esc(section.title) + '</h2><p>Manage entries and media for this website section.</p></div></div>' +
