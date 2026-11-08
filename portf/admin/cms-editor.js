@@ -207,7 +207,7 @@
             .forEach(function (id) { stillUsed.add(id); });
         });
         const safeToDraft = previousMediaIds.filter(function (id) {
-          return !stillUsed.has(id) && !selectedMedia.has(id);
+          return !stillUsed.has(id);
         });
         if (safeToDraft.length) {
           await client().from("cms_media").update({ status: "draft", published_at: null })
