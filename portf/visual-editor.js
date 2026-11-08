@@ -47,15 +47,19 @@
   }
   function buildToolbar(){
     toolbar=document.createElement("div");toolbar.id="veToolbar";
-    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-status" id="veStatus" role="status"></div>';
+    toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-request" id="veRequest" style="display:none;padding:8px 3px"><label for="veInstruction" style="display:block;color:#f2ca68;font-weight:800;margin-bottom:6px">Instruction / comment for this selection</label><textarea id="veInstruction" placeholder="Describe what should change, or leave feedback for this section…" style="width:100%;box-sizing:border-box;min-height:90px;padding:9px;border-radius:8px;border:1px solid #6f6088;background:#261b39;color:#fff;font:13px system-ui"></textarea><div class="ve-actions" style="margin-top:7px"><button id="veSaveNote">Save requirement</button><button id="veCloseNote" class="alt">Close</button></div><div style="font-size:11px;color:#c9bfd8;margin-top:6px">Saved as a private draft note. It does not change the live website.</div></div><div class="ve-status" id="veStatus" role="status"></div>';
     document.body.appendChild(toolbar);statusNode=toolbar.querySelector("#veStatus");
     toolbar.querySelector("#veEdit").onclick=editSelected;
     toolbar.querySelector("#veAdd").onclick=addContent;
+    var reqButton=document.createElement("button");reqButton.id="veRequirement";reqButton.className="alt";reqButton.textContent="Add requirement / comment";toolbar.querySelector(".ve-actions").appendChild(reqButton);
+    reqButton.onclick=function(){toolbar.querySelector("#veRequest").style.display="block";toolbar.querySelector("#veInstruction").focus();positionToolbar(selected);};
     toolbar.querySelector("#veAddMedia").onclick=addMediaBlock;
     toolbar.querySelector("#veMedia").onclick=function(){var input=toolbar.querySelector("#veFile");input.click();};
     toolbar.querySelector("#veFile").onchange=function(){if(this.files&&this.files[0])uploadMedia(this.files[0]);};
     toolbar.querySelector("#veApply").onclick=applyEdit;
     toolbar.querySelector("#veCancel").onclick=cancelEdit;
+    toolbar.querySelector("#veSaveNote").onclick=saveInstruction;
+    toolbar.querySelector("#veCloseNote").onclick=function(){toolbar.querySelector("#veRequest").style.display="none";};
     toolbar.querySelector("#vePreview").onclick=previewDraft;
     toolbar.querySelector("#veDraft").onclick=function(){save("draft");};
     toolbar.querySelector("#vePublish").onclick=function(){save("published");};
@@ -69,13 +73,25 @@
     toolbar.querySelector("#veMedia").style.display=(kindOf(el)==="image"||kindOf(el)==="video")?"inline-block":"none";
     toolbar.querySelector("#veUrl").style.display=kindOf(el)==="link"?"block":"none";
     toolbar.querySelector("#veText").value=valueOf(el);toolbar.querySelector("#veUrl").value=kindOf(el)==="link"?valueOf(el):"";
-    toolbar.querySelector("#veEditBox").style.display="none";editing=false;toolbar.style.display="block";positionToolbar(el);
+    toolbar.querySelector("#veEditBox").style.display="none";toolbar.querySelector("#veRequest").style.display="none";editing=false;toolbar.style.display="block";positionToolbar(el);
     var found=await client.from("cms_content").select("id,status,payload").eq("site_id",siteId).eq("section_id",selectedSection.id).eq("slug","visual:"+key).eq("status","draft").order("updated_at",{ascending:false}).limit(1).maybeSingle();
     selectedRecord=found.data||null;selectedMedia=null;say(selectedRecord?"Draft exists for this element.":"Selected. Choose an action.");
   }
   async function previewDraft(){if(!selected){say("Select an item first.");return;}cancelEdit();if(!selectedRecord||!selectedRecord.payload){say("No saved draft for this item yet. Your current on-page changes are already previewed.");return;}var p=selectedRecord.payload;if(p.media_id){var m=await client.from("cms_media").select("storage_path,media_type").eq("id",p.media_id).maybeSingle();if(m.data){var signed=await client.storage.from(BUCKET).createSignedUrl(m.data.storage_path,3600);if(!signed.error)apply(selected,m.data.media_type==="video"?"video":"image",signed.data.signedUrl);}}else apply(selected,p.element_kind,p.element_value);say("Saved draft preview loaded on the actual page. It is still private.");}
-  function editSelected(){if(!selected)return;editing=true;var box=toolbar.querySelector("#veEditBox");box.style.display="block";var k=kindOf(selected);toolbar.querySelector("#veText").style.display=k==="text"?"block":"none";toolbar.querySelector("#veUrl").style.display=k==="link"?"block":"none";toolbar.querySelector("#veText").value=valueOf(selected);toolbar.querySelector("#veUrl").value=k==="link"?valueOf(selected):"";if(k==="text"){selected.contentEditable="true";selected.focus();}say("Edit directly on the page, or use the field here. Apply when finished.");positionToolbar(selected);}
+  function editSelected(){if(!selected)return;if(selected===rootFor(selected)||selected.matches("article,main,header,footer,nav")){say("This is a layout/container selection. Use Add requirement to describe the structural change; choose a text or media item for direct editing.");return;}editing=true;var box=toolbar.querySelector("#veEditBox");box.style.display="block";var k=kindOf(selected);toolbar.querySelector("#veText").style.display=k==="text"?"block":"none";toolbar.querySelector("#veUrl").style.display=k==="link"?"block":"none";toolbar.querySelector("#veText").value=valueOf(selected);toolbar.querySelector("#veUrl").value=k==="link"?valueOf(selected):"";if(k==="text"){selected.contentEditable="true";selected.focus();}say("Edit directly on the page, or use the field here. Apply when finished.");positionToolbar(selected);}
   function applyEdit(){if(!selected)return;var k=kindOf(selected);if(k==="text"){selected.contentEditable="false";}else if(k==="link")apply(selected,k,toolbar.querySelector("#veUrl").value.trim());else return;say("Changes previewed on the page. Save as draft or publish.");}
+  async function saveInstruction(){
+    if(!selected||!selectedSection)return;
+    var note=toolbar.querySelector("#veInstruction").value.trim();
+    if(!note){say("Write an instruction or comment first.");return;}
+    var user=await client.auth.getUser();
+    var key=keyFor(selected,rootFor(selected));
+    var payload={visual_editor:true,visual_editor_note:true,element_key:key,element_kind:"instruction",element_value:note,selection_tag:selected.tagName.toLowerCase(),selection_label:(selectedSection.title||rootFor(selected).id)};
+    var result=await client.from("cms_content").insert({site_id:siteId,page_id:pageId,section_id:selectedSection.id,title:"Editor requirement: "+(selectedSection.title||rootFor(selected).id),slug:"visual-note:"+key+":"+Date.now(),payload:payload,status:"draft",sort_order:0});
+    if(result.error){say("Requirement could not be saved: "+result.error.message);return;}
+    toolbar.querySelector("#veInstruction").value="";
+    say("Requirement saved privately as a draft note. It has not changed the website.");
+  }
   function cancelEdit(){if(!selected)return;selected.contentEditable="false";toolbar.querySelector("#veEditBox").style.display="none";toolbar.querySelector("#veText").value=valueOf(selected);say("Edit controls closed. Current page is your preview.");}
   async function addContent(){
     if(!selected||!selectedSection)return;var root=rootFor(selected),node=document.createElement("p");node.textContent="New content — click Edit to change this text.";node.setAttribute("data-ve-new-content","true");root.appendChild(node);selected=node;await select(node);editSelected();say("New paragraph added at the end of this section. Edit it, then save as draft.");
