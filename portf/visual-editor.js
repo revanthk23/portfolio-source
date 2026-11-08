@@ -4,9 +4,13 @@
   var SUPABASE_URL="https://lfmbvvwnrhohdifypuyw.supabase.co";
   var SUPABASE_KEY="sb_publishable_kwoxePVR6yzu60XODZJhxg_Kngnh01x";
   var BUCKET="cms-media", editMode=new URLSearchParams(location.search).get("mode")==="edit";
-  var client=null,siteId=null,pageId=null,sections=new Map(),selected=null,selectedSection=null;
+  var client=null,siteId=null,pageId=null,sections=new Map(),selected=null,selectedSection=null,editingEnabled=false,editToggle=null;
   var selectedRecord=null,selectedMedia=null,toolbar=null,editor=null,statusNode=null,editing=false;
-  function rootFor(el){return el&&el.closest("section[id],.topic[id]");}
+  function rootFor(el){
+    var node=el;
+    while(node&&node!==document.body){if(node.id&&sections.has(node.id))return node;node=node.parentElement;}
+    return null;
+  }
   function pathFor(el,root){var p=[],n=el;while(n&&n!==root){var t=n.tagName.toLowerCase(),i=1,s=n;while((s=s.previousElementSibling))if(s.tagName===n.tagName)i++;p.unshift(t+":nth-of-type("+i+")");n=n.parentElement;}return p.join(">");}
   function keyFor(el,root){var k=root.id+"__"+pathFor(el,root).replace(/[^a-zA-Z0-9_-]/g,"_");el.setAttribute("data-ve-key",k);return k;}
   function kindOf(el){if(el.tagName==="IMG")return"image";if(el.tagName==="VIDEO"||el.tagName==="SOURCE")return"video";if(el.tagName==="A")return"link";return"text";}
@@ -19,6 +23,7 @@
       "#veAdminLink{border:1px solid #e8b94f;border-radius:99px;padding:8px 14px;color:#e8b94f!important}",
       "body.ve-editing [data-ve-key]{cursor:pointer;outline:1px dashed #e8b94f88;outline-offset:3px}",
       "body.ve-editing [data-ve-key]:hover,body.ve-editing [data-ve-key].ve-selected{outline:2px solid #e8b94f;outline-offset:4px}",
+      "#veEditToggle{position:fixed;right:18px;top:18px;z-index:10025;border:1px solid #e8b94f;background:#171027;color:#f2ca68;border-radius:999px;padding:11px 17px;font:800 13px system-ui;box-shadow:0 8px 28px #0008;cursor:pointer}#veEditToggle[aria-pressed=true]{background:#e8b94f;color:#171027}",
       "#veToolbar{position:fixed;z-index:10020;display:none;min-width:280px;max-width:min(430px,calc(100vw - 24px));background:#171027;color:#fff;border:1px solid #e8b94f;border-radius:14px;padding:10px;box-shadow:0 14px 45px #0009;font:13px system-ui;}",
       "#veToolbar .ve-head{font-weight:800;color:#f2ca68;padding:4px 6px 8px;max-width:390px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
       "#veToolbar .ve-actions{display:flex;gap:6px;flex-wrap:wrap}#veToolbar button{border:0;border-radius:8px;padding:8px 10px;background:#e8b94f;color:#171027;font-weight:750;cursor:pointer}",
@@ -46,6 +51,8 @@
     sections.clear();(r.data||[]).forEach(function(x){sections.set(x.section_key,x);});box.remove();start();
   }
   function buildToolbar(){
+    editToggle=document.createElement("button");editToggle.id="veEditToggle";editToggle.type="button";editToggle.textContent="Enable editing";editToggle.setAttribute("aria-pressed","false");document.body.appendChild(editToggle);
+    editToggle.onclick=function(){setEditingEnabled(!editingEnabled);};
     toolbar=document.createElement("div");toolbar.id="veToolbar";
     toolbar.innerHTML='<div class="ve-head" id="veTitle">Selected element</div><div class="ve-actions"><button id="veEdit">Edit</button><button id="veAdd" class="alt">Add text</button><button id="veAddMedia" class="alt">Add image / video</button><button id="veMedia" class="alt">Replace image / video</button><button id="vePreview" class="alt">Preview</button><button id="veDraft" class="alt">Save draft</button><button id="vePublish">Publish</button><button id="veExit" class="alt">Viewer page</button></div><div class="ve-editbox" id="veEditBox"><textarea id="veText"></textarea><input id="veUrl" type="url" placeholder="Paste destination URL" style="display:none;margin-top:7px"><input id="veFile" type="file" accept="image/*,video/*" style="display:none;margin-top:7px"><div class="ve-actions" style="margin-top:7px"><button id="veApply">Apply</button><button id="veCancel" class="alt">Cancel</button></div></div><div class="ve-request" id="veRequest" style="display:none;padding:8px 3px"><label for="veInstruction" style="display:block;color:#f2ca68;font-weight:800;margin-bottom:6px">Instruction / comment for this selection</label><textarea id="veInstruction" placeholder="Describe what should change, or leave feedback for this section…" style="width:100%;box-sizing:border-box;min-height:90px;padding:9px;border-radius:8px;border:1px solid #6f6088;background:#261b39;color:#fff;font:13px system-ui"></textarea><div class="ve-actions" style="margin-top:7px"><button id="veSaveNote">Save requirement</button><button id="veCloseNote" class="alt">Close</button></div><div style="font-size:11px;color:#c9bfd8;margin-top:6px">Saved as a private draft note. It does not change the live website.</div></div><div class="ve-status" id="veStatus" role="status"></div>';
     document.body.appendChild(toolbar);statusNode=toolbar.querySelector("#veStatus");
@@ -65,8 +72,20 @@
     toolbar.querySelector("#vePublish").onclick=function(){save("published");};
     toolbar.querySelector("#veExit").onclick=async function(){await client.auth.signOut();location.href=location.pathname;};
   }
+  function setEditingEnabled(enabled){
+    editingEnabled=!!enabled;document.body.classList.toggle("ve-editing",editingEnabled);
+    editToggle.textContent=editingEnabled?"Editing ON · Turn off":"Enable editing";
+    editToggle.setAttribute("aria-pressed",editingEnabled?"true":"false");
+    if(!editingEnabled){
+      if(selected){selected.classList.remove("ve-selected");selected.contentEditable="false";}
+      selected=null;selectedSection=null;selectedRecord=null;selectedMedia=null;
+      if(toolbar)toolbar.style.display="none";
+      say("Editing is off. Navigate the website normally, including its subsections.");
+    }else say("Editing is on. Select a section, nested subsection, or individual item.");
+  }
   function positionToolbar(el){var r=el.getBoundingClientRect(),w=toolbar.offsetWidth||340,h=toolbar.offsetHeight||160;var left=Math.max(12,Math.min(window.innerWidth-w-12,r.left));var top=r.bottom+h+14<window.innerHeight?r.bottom+10:Math.max(12,r.top-h-10);toolbar.style.left=left+"px";toolbar.style.top=top+"px";}
   async function select(el){
+    if(!editingEnabled)return;
     var root=rootFor(el);if(!root||!sections.has(root.id)){say("This area is not yet mapped to a CMS section.");return;}
     if(selected)selected.classList.remove("ve-selected");selected=el;selectedSection=sections.get(root.id);selected.classList.add("ve-selected");
     var key=keyFor(el,root);toolbar.querySelector("#veTitle").textContent=(selectedSection.title||root.id)+" · "+kindOf(el);
@@ -120,11 +139,19 @@
     say(status==="published"?"Published. Return to the viewer page to check the public result.":"Draft saved. It remains private until published.");
   }
   function start(){
-    styles();document.body.classList.add("ve-editing");buildToolbar();
-    document.addEventListener("click",function(e){if(e.target.closest("#veToolbar"))return;var el=e.target.closest("h1,h2,h3,h4,p,a,button,img,video,source,li,span,section,.topic");if(!el||!rootFor(el))return;e.preventDefault();e.stopPropagation();select(el);},true);
+    styles();buildToolbar();setEditingEnabled(false);
+    document.addEventListener("click",function(e){
+      if(!editingEnabled||e.target.closest("#veToolbar")||e.target.closest("#veEditToggle"))return;
+      var root=rootFor(e.target);if(!root)return;
+      var el=e.target.closest("h1,h2,h3,h4,p,a,button,img,video,source,li,span,section,article,.topic,.cms-dynamic-subsection,div[id]");
+      if(!el)return;
+      var nested=e.target.closest(".topic[id],.cms-dynamic-subsection[id],section[id],article[id]");
+      if(nested&&sections.has(nested.id)&&(e.target===nested||e.target===nested.querySelector(":scope > h2,:scope > h3,:scope > h4")))el=nested;
+      e.preventDefault();e.stopPropagation();select(el);
+    },true);
     window.addEventListener("scroll",function(){if(selected&&toolbar.style.display==="block")positionToolbar(selected);},{passive:true});
     window.addEventListener("resize",function(){if(selected&&toolbar.style.display==="block")positionToolbar(selected);});
-    say("Select any item on the page to open its editing options.");
+    say("Editing is off. Use the top-right button to turn editing on whenever you need it.");
   }
   async function loadPublished(){
     var pub=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
