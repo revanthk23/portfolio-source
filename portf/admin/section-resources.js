@@ -9,6 +9,7 @@
   let currentFolder = null;
   let files = [];
   let records = [];
+  let sectionRows = [];
 
   const client = function () { return window.portfolioSupabaseClient; };
   const site = function () { return window.portfolioCmsSiteId; };
@@ -112,8 +113,17 @@
         .eq("section_key", key);
       const pageId = (window.portfolioCmsStructureSynced || {}).pageId;
       if (pageId) query = query.eq("page_id", pageId);
-      const sectionResult = await query.maybeSingle();
+      const [sectionResult, hierarchyResult] = await Promise.all([
+        query.maybeSingle(),
+        client().from("cms_sections")
+          .select("id,section_key,title,parent_section_id,sort_order")
+          .eq("site_id", site())
+          .eq("page_id", pageId)
+          .order("sort_order", { ascending: true })
+      ]);
       if (sectionResult.error) throw sectionResult.error;
+      if (hierarchyResult.error) throw hierarchyResult.error;
+      sectionRows = hierarchyResult.data || [];
       if (!sectionResult.data) {
         host.innerHTML = '<section class="section-resources-card"><h3>Section media & resources</h3>' +
           '<p class="form-hint">This section has not synced to the resource library yet. Refresh the admin dashboard ' +
@@ -164,6 +174,32 @@
     });
     const trail = folderTrail();
 
+    function destinationLabel(row) {
+      const names = [row.title];
+      let parentId = row.parent_section_id;
+      let guard = 0;
+      while (parentId && guard < 30) {
+        guard += 1;
+        const parent = sectionRows.find(function (candidate) { return candidate.id === parentId; });
+        if (!parent) break;
+        names.unshift(parent.title);
+        parentId = parent.parent_section_id;
+      }
+      return names.join(" / ");
+    }
+    const destinationOptions = sectionRows.map(function (row) {
+      return '<option value="' + esc(row.section_key) + '"' +
+        (row.section_key === currentKey ? ' selected' : '') + '>' +
+        esc(destinationLabel(row)) + '</option>';
+    }).join("");
+    const selectedDestination = sectionRows.find(function (row) { return row.section_key === currentKey; });
+    const destinationPicker = '<section class="section-resources-card resource-destination-card">' +
+      '<label for="resourceDestinationSelect"><strong>Exact website destination</strong></label>' +
+      '<select id="resourceDestinationSelect" class="resource-destination-select">' +
+      destinationOptions + '</select><p class="form-hint">Every upload, folder, link and publish action below applies only to this selected website section.</p>' +
+      '<p class="form-hint"><strong>Selected destination:</strong> ' +
+      esc(selectedDestination ? destinationLabel(selectedDestination) : currentSection.title) +
+      '</p></section>';
     const breadcrumbs = '<button class="secondary-button" type="button" id="resourceRoot">All section resources</button>' +
       trail.map(function (folder) {
         return '<span aria-hidden="true">/</span><button class="secondary-button" type="button" data-open-folder="' +
@@ -203,7 +239,8 @@
         '<button class="danger-button" type="button" data-delete-file="' + esc(row.id) + '">Delete</button></div>';
     }).join("");
 
-    host.innerHTML = '<section class="section-resources-card">' +
+    host.innerHTML = destinationPicker +
+      '<section class="section-resources-card">' +
       '<div class="resource-heading"><div><h3>Section media & resources</h3>' +
       '<p class="cms-help">A separate file manager for this section. Upload images, videos, PDFs, Word/Excel/PowerPoint ' +
       'files, audio, archives and other file types. Create folders, subfolders and web links.</p></div>' +
@@ -543,6 +580,10 @@
   });
 
   document.addEventListener("change", function (event) {
+    if (event.target.id === "resourceDestinationSelect" && event.target.value) {
+      load(event.target.value);
+      return;
+    }
     if (event.target.id === "resourceFiles" && event.target.files && event.target.files.length) {
       upload(event.target.files);
       event.target.value = "";

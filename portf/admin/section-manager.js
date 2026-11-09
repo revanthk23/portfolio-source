@@ -14,6 +14,19 @@
   function slugify(value) {
     return String(value || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
+  function sectionPath(row) {
+    const names = [row.title];
+    let parentId = row.parent_section_id;
+    let guard = 0;
+    while (parentId && guard < 30) {
+      guard += 1;
+      const parent = rows.find(item => item.id === parentId);
+      if (!parent) break;
+      names.unshift(parent.title);
+      parentId = parent.parent_section_id;
+    }
+    return names.join(" / ");
+  }
   function ensureNavButton() {
     if (!nav || nav.querySelector('[data-section="section-manager"]')) return;
     const button = document.createElement("button");
@@ -27,12 +40,6 @@
   if (nav) {
     new MutationObserver(ensureNavButton).observe(nav, { childList: true, subtree: true });
     ensureNavButton();
-    nav.addEventListener("click", event => {
-      const button = event.target.closest('[data-section="section-manager"]');
-      if (!button) return;
-      event.preventDefault();
-      render().catch(showError);
-    });
   }
 
   async function loadRows() {
@@ -66,14 +73,14 @@
             '<button class="danger-button" data-remove-section="' + esc(row.id) + '">Delete</button></div></article>';
         }).join("") : '<p class="empty-state">No sections have been registered yet.</p>') +
         '</div><form id="cmsSectionForm" class="editor-form" hidden><h3 id="cmsSectionFormTitle">New section</h3>' +
-        '<label>Section title<input id="cmsSectionTitle" maxlength="120" required placeholder="e.g. Projects"></label>' +
+        '<label>Website section / subsection name<input id="cmsSectionTitle" maxlength="120" required placeholder="e.g. Website Development"></label>' +
         '<label>Section key<input id="cmsSectionKey" maxlength="70" required placeholder="e.g. projects"><small>Use lowercase letters, numbers and hyphens. Existing keys cannot be changed after creation.</small></label>' +
-        '<label>Parent section<select id="cmsSectionParent"><option value="">None — main section</option>' +
-        parents.map(p => '<option value="' + esc(p.id) + '">' + esc(p.title) + ' (' + esc(p.section_key) + ')</option>').join("") + '</select><small>Choose any existing section to create a subsection at any depth. Leave empty for a main section.</small></label>' +
+        '<label>Exact parent / destination<select id="cmsSectionParent"><option value="">None — create a main website section</option>' +
+        parents.map(p => '<option value="' + esc(p.id) + '">' + esc(sectionPath(p)) + '</option>').join("") + '</select><small>Choose the exact existing website section where this new subsection belongs. Its media will have a separate destination in the resource manager.</small></label>' +
         '<div class="form-row"><label>Status<select id="cmsSectionStatus"><option value="draft">Draft</option><option value="published">Published</option><option value="hidden">Hidden</option></select></label>' +
         '<label>Display order<input id="cmsSectionOrder" type="number" value="0"></label></div>' +
         '<div class="form-actions"><button class="primary-button" type="submit">Save section</button><button class="secondary-button" id="cancelCmsSection" type="button">Cancel</button></div></form>' +
-        '<div class="notice"><strong>How publishing works</strong><p>Draft and hidden sections stay off the public site. Published sections are eligible to appear publicly once the public renderer is connected. Existing website sections remain discoverable automatically.</p></div>';
+        '<div class="notice"><strong>Connected to your public portfolio</strong><p>Published sections and their published content/resources are eligible to appear on the live website. Draft and hidden sections remain private. Existing hand-built website sections are discovered automatically and are not removed or redesigned by this manager.</p></div>';
       document.getElementById("pageTitle").textContent = "Section Manager";
       document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === "section-manager"));
     });
@@ -111,6 +118,10 @@
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   panel.addEventListener("click", async event => {
+    const openSection = event.target.closest("[data-open-section]");
+    if (openSection && typeof window.portfolioAdminOpenSection === "function") {
+      return window.portfolioAdminOpenSection(openSection.dataset.openSection);
+    }
     if (event.target.id === "newCmsSection") return openForm(null);
     if (event.target.id === "cancelCmsSection") { editing = null; document.getElementById("cmsSectionForm").hidden = true; return; }
     if (event.target.id === "retryCmsSections") return render().catch(showError);
