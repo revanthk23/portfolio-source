@@ -1,3 +1,0 @@
-# Keep every existing link to the legacy Netlify portfolio working.
-# Forward the same path and query string to the Cloudflare Pages site.
-/*  https://portfolio-source-dpi.pages.dev/:splat  301!
