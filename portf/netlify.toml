@@ -1,5 +1,2 @@
-[[redirects]]
-  from = "/*"
-  to = "https://portfolio-source-dpi.pages.dev/:splat"
-  status = 301
-  force = true
+[build]
+  publish = "."
